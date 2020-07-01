@@ -26,7 +26,7 @@ func NewAPIClient(ctx context.Context, region string) (*API, error) {
 	regionalEndpoint := fmt.Sprintf("https://%s-run.googleapis.com/", region)
 	client, err := run.NewService(ctx, option.WithEndpoint(regionalEndpoint))
 	if err != nil {
-		return nil, errors.Wrap(err, "could not initialize a APIService instance")
+		return nil, errors.Wrap(err, "could not initialize client for the Cloud Run API")
 	}
 
 	return &API{
