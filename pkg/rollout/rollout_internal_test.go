@@ -8,12 +8,10 @@ import (
 )
 
 func TestNextCandidateTraffic100(t *testing.T) {
-	config := &config.Config{
-		Rollout: &config.Rollout{
-			Steps: []int64{5, 30, 60},
-		},
+	strategy := &config.Strategy{
+		Steps: []int64{5, 30, 60},
 	}
-	r := &Rollout{Config: config}
+	r := &Rollout{Strategy: strategy}
 
 	var tests = []struct {
 		in  int64

@@ -25,6 +25,7 @@ import (
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/run"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/config"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/rollout"
+	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/service"
 	stackdriver "github.com/TV4/logrus-stackdriver-formatter"
 	isatty "github.com/mattn/go-isatty"
 	"github.com/pkg/errors"
@@ -52,11 +53,19 @@ func (steps stepFlags) String() string {
 }
 
 var (
-	flCLI         bool
-	flHTTPAddr    string
-	flProject     string
-	flRegion      string
-	flService     string
+	flCLI      bool
+	flHTTPAddr string
+	flProject  string
+
+	// Either service or label selection needed.
+	flService string
+	flLabel   string
+
+	// Empty array means all regions.
+	flRegions       []string
+	flRegionsString string
+
+	// Rollout strategy-related flags.
 	flSteps       stepFlags
 	flStepsString string
 	flInterval    int64
@@ -66,42 +75,36 @@ func init() {
 	flag.BoolVar(&flCLI, "cli", false, "run as CLI application to manage rollout in intervals")
 	flag.StringVar(&flHTTPAddr, "http-addr", "", "listen on http portrun on request (e.g. :8080)")
 	flag.StringVar(&flProject, "project", "", "project in which the service is deployed")
-	flag.StringVar(&flRegion, "region", "", "the Cloud Run region where the service is deployed")
 	flag.StringVar(&flService, "service", "", "the service to manage")
+	flag.StringVar(&flLabel, "label", "rollout-strategy=gradual", "filter services based on a label (e.g. team=backend)")
+	flag.StringVar(&flRegionsString, "regions", "us-east1", "the Cloud Run regions where the service should be looked at")
 	flag.Var(&flSteps, "step", "a percentage in traffic the candidate should go through")
-	flag.StringVar(&flStepsString, "steps", "", "define steps in one flag separated by commas (e.g. 5,30,60)")
+	flag.StringVar(&flStepsString, "steps", "5,20,50,80", "define steps in one flag separated by commas (e.g. 5,30,60)")
 	flag.Int64Var(&flInterval, "interval", 0, "the time between each rollout step")
 	flag.Parse()
+
+	if flRegionsString != "" {
+		flRegions = strings.Split(flRegionsString, ",")
+	}
 }
 
 func main() {
 	logger := logrus.New()
-
-	// -steps flag has precedence over the list of -step flags.
-	if flStepsString != "" {
-		steps := strings.Split(flStepsString, ",")
-		flSteps = []int64{}
-		for _, step := range steps {
-			value, err := strconv.ParseInt(step, 10, 64)
-			if err != nil {
-				logger.Fatalf("invalid step value: %v", err)
-			}
-
-			flSteps = append(flSteps, value)
-		}
+	valid, err := flagsAreValid()
+	if !valid {
+		logger.Fatalf("invalid flags: %v", err)
 	}
 
-	if !flCLI && flHTTPAddr == "" {
-		logger.Fatal("one of -cli or -http-addr must be set")
+	// Configuration.
+	var target *config.Target
+	if flLabel != "" {
+		target = config.NewTargetForLabelSelector(flProject, flRegions, flLabel)
+	} else {
+		target = config.NewTargetForServiceName(flProject, flRegions, flService)
 	}
-
-	if flCLI && flHTTPAddr != "" {
-		logger.Fatal("only one of -cli or -http-addr can be used")
-	}
-
-	cfg := config.WithValues(flProject, flRegion, flService, flSteps, flInterval)
+	cfg := config.WithValues([]*config.Target{target}, flSteps, flInterval)
 	if !cfg.IsValid(flCLI) {
-		logger.Fatalf("invalid config values")
+		logger.Fatalf("invalid rollout configuration")
 	}
 
 	if !isatty.IsTerminal(os.Stdout.Fd()) {
@@ -117,11 +120,16 @@ func main() {
 
 func runCLI(logger *logrus.Logger, cfg *config.Config) {
 
-	client, err := run.NewAPIClient(context.Background(), cfg.Metadata.Region)
+	runclient, err := run.NewAPIClient(context.Background(), flRegions[0])
 	if err != nil {
 		logger.Fatalf("could not initilize Cloud Run client: %v", err)
 	}
-	roll := rollout.New(client, cfg).WithLogger(logger)
+	roll := rollout.New(&service.Client{
+		RunClient:   runclient,
+		Project:     cfg.Targets[0].Project,
+		ServiceName: "hello",
+		Region:      flRegions[0],
+	}, cfg.Strategy).WithLogger(logger)
 
 	for {
 		changed, err := roll.Rollout()
@@ -132,7 +140,45 @@ func runCLI(logger *logrus.Logger, cfg *config.Config) {
 			logger.Info("Rollout process succeeded")
 		}
 
-		interval := time.Duration(cfg.Rollout.Interval)
+		interval := time.Duration(cfg.Strategy.Interval)
 		time.Sleep(interval * time.Second)
 	}
+}
+
+func flagsAreValid() (bool, error) {
+	// -steps flag has precedence over the list of -step flags.
+	if flStepsString != "" {
+		steps := strings.Split(flStepsString, ",")
+		flSteps = []int64{}
+		for _, step := range steps {
+			value, err := strconv.ParseInt(step, 10, 64)
+			if err != nil {
+				return false, errors.Wrap(err, "invalid step value")
+			}
+
+			flSteps = append(flSteps, value)
+		}
+	}
+
+	if !flCLI && flHTTPAddr == "" {
+		return false, errors.New("one of -cli or -http-addr must be set")
+	}
+	if flCLI && flHTTPAddr != "" {
+		return false, errors.New("only one of -cli or -http-addr can be used")
+	}
+
+	if flLabel == "" && flService == "" {
+		return false, errors.New("one of -label or -service must be set")
+	}
+	if flLabel != "" && flService != "" {
+		return false, errors.New("only one of -label or -service can be used")
+	}
+
+	for _, region := range flRegions {
+		if region == "" {
+			return false, errors.New("region cannot be empty")
+		}
+	}
+
+	return true, nil
 }
