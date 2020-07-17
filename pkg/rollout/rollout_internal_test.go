@@ -11,7 +11,7 @@ func TestNextCandidateTraffic100(t *testing.T) {
 	strategy := &config.Strategy{
 		Steps: []int64{5, 30, 60},
 	}
-	r := &Rollout{Strategy: strategy}
+	r := &Rollout{strategy: strategy}
 
 	var tests = []struct {
 		in  int64

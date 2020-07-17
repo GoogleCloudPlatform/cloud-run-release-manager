@@ -17,15 +17,7 @@ func TestIsValid(t *testing.T) {
 		{
 			name: "correct config with label selector",
 			config: config.WithValues([]*config.Target{
-				config.NewTargetForLabelSelector("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 60}, 20),
-			cliMode:  true,
-			expected: true,
-		},
-		{
-			name: "correct config with service selector",
-			config: config.WithValues([]*config.Target{
-				config.NewTargetForServiceName("myproject", []string{"us-east1", "us-west1"}, "mysvc"),
+				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
 			}, []int64{5, 30, 60}, 20),
 			cliMode:  true,
 			expected: true,
@@ -34,7 +26,7 @@ func TestIsValid(t *testing.T) {
 		{
 			name: "missing project",
 			config: config.WithValues([]*config.Target{
-				config.NewTargetForLabelSelector("", []string{"us-east1", "us-west1"}, "team=backend"),
+				config.NewTarget("", []string{"us-east1", "us-west1"}, "team=backend"),
 			}, []int64{5, 30, 60}, 20),
 			cliMode:  true,
 			expected: false,
@@ -43,7 +35,7 @@ func TestIsValid(t *testing.T) {
 		{
 			name: "missing steps",
 			config: config.WithValues([]*config.Target{
-				config.NewTargetForLabelSelector("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
+				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
 			}, []int64{}, 20),
 			cliMode:  true,
 			expected: false,
@@ -52,7 +44,7 @@ func TestIsValid(t *testing.T) {
 		{
 			name: "steps not in order",
 			config: config.WithValues([]*config.Target{
-				config.NewTargetForLabelSelector("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
+				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
 			}, []int64{30, 30, 60}, 20),
 			cliMode:  true,
 			expected: false,
@@ -61,7 +53,7 @@ func TestIsValid(t *testing.T) {
 		{
 			name: "step greater than 100",
 			config: config.WithValues([]*config.Target{
-				config.NewTargetForLabelSelector("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
+				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
 			}, []int64{5, 30, 101}, 20),
 			cliMode:  true,
 			expected: false,
@@ -70,32 +62,16 @@ func TestIsValid(t *testing.T) {
 		{
 			name: "no interval for cli mode",
 			config: config.WithValues([]*config.Target{
-				config.NewTargetForLabelSelector("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
+				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
 			}, []int64{5, 30, 60}, 0),
 			cliMode:  true,
 			expected: false,
 		},
-		// Empty filter for selector.
+		// Empty label selector.
 		{
-			name: "empty filter for selector",
+			name: "empty label selector",
 			config: config.WithValues([]*config.Target{
-				config.NewTargetForLabelSelector("myproject", []string{"us-east1", "us-west1"}, ""),
-			}, []int64{5, 30, 60}, 20),
-			cliMode:  true,
-			expected: false,
-		},
-		// Invalid selector type (not serviceName nor labelSelector).
-		{
-			name: "invalid selector type",
-			config: config.WithValues([]*config.Target{
-				{
-					Project: "myproject",
-					Regions: []string{"us-east1", "us-west1"},
-					Selector: config.TargetSelector{
-						Type:   "aType",
-						Filter: "aFilter",
-					},
-				},
+				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, ""),
 			}, []int64{5, 30, 60}, 20),
 			cliMode:  true,
 			expected: false,

@@ -21,6 +21,12 @@ type API struct {
 	Region string
 }
 
+// regions are the available regions.
+//
+// TODO: caching regions might be unnecessary if we are querying them once during
+// the lifespan of the process.
+var regions = []string{}
+
 // NewAPIClient initializes an instance of APIService.
 func NewAPIClient(ctx context.Context, region string) (*API, error) {
 	regionalEndpoint := fmt.Sprintf("https://%s-run.googleapis.com/", region)
@@ -45,6 +51,41 @@ func (a *API) Service(namespace, serviceID string) (*run.Service, error) {
 func (a *API) ReplaceService(namespace, serviceID string, svc *run.Service) (*run.Service, error) {
 	serviceName := serviceName(namespace, serviceID)
 	return a.Client.Namespaces.Services.ReplaceService(serviceName, svc).Do()
+}
+
+// ServicesWithLabelSelector gets services filtered by a label selector.
+func (a *API) ServicesWithLabelSelector(namespace string, labelSelector string) ([]*run.Service, error) {
+	parent := fmt.Sprintf("namespaces/%s", namespace)
+
+	servicesList, err := a.Client.Namespaces.Services.List(parent).LabelSelector(labelSelector).Do()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to filter services by label selector")
+	}
+
+	return servicesList.Items, nil
+}
+
+// Regions gets the supported regions for the project.
+func Regions(ctx context.Context, project string) ([]string, error) {
+	if len(regions) != 0 {
+		return regions, nil
+	}
+
+	client, err := run.NewService(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not initialize client for the Cloud Run API")
+	}
+
+	name := fmt.Sprintf("projects/%s", project)
+	resp, err := client.Projects.Locations.List(name).Do()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get locations")
+	}
+
+	for _, location := range resp.Locations {
+		regions = append(regions, location.LocationId)
+	}
+	return regions, nil
 }
 
 // generateServiceName returns the name of the specified service. It returns the

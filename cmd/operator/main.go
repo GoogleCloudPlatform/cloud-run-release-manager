@@ -17,15 +17,15 @@ package main
 import (
 	"context"
 	"flag"
+	"log"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/run"
+	runapi "github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/run"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/config"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/rollout"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/service"
 	stackdriver "github.com/TV4/logrus-stackdriver-formatter"
 	isatty "github.com/mattn/go-isatty"
 	"github.com/pkg/errors"
@@ -53,13 +53,10 @@ func (steps stepFlags) String() string {
 }
 
 var (
-	flCLI      bool
-	flHTTPAddr string
-	flProject  string
-
-	// Either service or label selection needed.
-	flService string
-	flLabel   string
+	flCLI           bool
+	flHTTPAddr      string
+	flProject       string
+	flLabelSelector string
 
 	// Empty array means all regions.
 	flRegions       []string
@@ -75,8 +72,7 @@ func init() {
 	flag.BoolVar(&flCLI, "cli", false, "run as CLI application to manage rollout in intervals")
 	flag.StringVar(&flHTTPAddr, "http-addr", "", "listen on http portrun on request (e.g. :8080)")
 	flag.StringVar(&flProject, "project", "", "project in which the service is deployed")
-	flag.StringVar(&flService, "service", "", "the service to manage")
-	flag.StringVar(&flLabel, "label", "rollout-strategy=gradual", "filter services based on a label (e.g. team=backend)")
+	flag.StringVar(&flLabelSelector, "label", "rollout-strategy=gradual", "filter services based on a label (e.g. team=backend)")
 	flag.StringVar(&flRegionsString, "regions", "us-east1", "the Cloud Run regions where the service should be looked at")
 	flag.Var(&flSteps, "step", "a percentage in traffic the candidate should go through")
 	flag.StringVar(&flStepsString, "steps", "5,20,50,80", "define steps in one flag separated by commas (e.g. 5,30,60)")
@@ -96,12 +92,7 @@ func main() {
 	}
 
 	// Configuration.
-	var target *config.Target
-	if flLabel != "" {
-		target = config.NewTargetForLabelSelector(flProject, flRegions, flLabel)
-	} else {
-		target = config.NewTargetForServiceName(flProject, flRegions, flService)
-	}
+	target := config.NewTarget(flProject, flRegions, flLabelSelector)
 	cfg := config.WithValues([]*config.Target{target}, flSteps, flInterval)
 	if !cfg.IsValid(flCLI) {
 		logger.Fatalf("invalid rollout configuration")
@@ -119,29 +110,32 @@ func main() {
 }
 
 func runCLI(logger *logrus.Logger, cfg *config.Config) {
-
-	runclient, err := run.NewAPIClient(context.Background(), flRegions[0])
-	if err != nil {
-		logger.Fatalf("could not initilize Cloud Run client: %v", err)
-	}
-	roll := rollout.New(&service.Client{
-		RunClient:   runclient,
-		Project:     cfg.Targets[0].Project,
-		ServiceName: "hello",
-		Region:      flRegions[0],
-	}, cfg.Strategy).WithLogger(logger)
-
 	for {
+		services, err := getTargetedServices(context.Background(), cfg.Targets)
+		if err != nil {
+			log.Fatalf("failed to get targeted services %v", err)
+		}
+		if len(services) == 0 {
+			logger.Warn("no service matches the targets")
+		}
+
+		// TODO: Handle all the filtered services
+		client, err := runapi.NewAPIClient(context.Background(), services[0].Region)
+		if err != nil {
+			logger.Fatal("failed to initialize Cloud Run API client")
+		}
+		roll := rollout.New(client, services[0], cfg.Strategy).WithLogger(logger)
+
 		changed, err := roll.Rollout()
 		if err != nil {
-			logger.Infof("Rollout failed: %v", err)
+			logger.Fatalf("Rollout failed: %v", err)
 		}
 		if changed {
 			logger.Info("Rollout process succeeded")
 		}
 
-		interval := time.Duration(cfg.Strategy.Interval)
-		time.Sleep(interval * time.Second)
+		duration := time.Duration(cfg.Strategy.Interval)
+		time.Sleep(duration * time.Second)
 	}
 }
 
@@ -165,13 +159,6 @@ func flagsAreValid() (bool, error) {
 	}
 	if flCLI && flHTTPAddr != "" {
 		return false, errors.New("only one of -cli or -http-addr can be used")
-	}
-
-	if flLabel == "" && flService == "" {
-		return false, errors.New("one of -label or -service must be set")
-	}
-	if flLabel != "" && flService != "" {
-		return false, errors.New("only one of -label or -service can be used")
 	}
 
 	for _, region := range flRegions {
