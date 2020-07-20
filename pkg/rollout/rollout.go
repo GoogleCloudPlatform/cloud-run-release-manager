@@ -82,15 +82,17 @@ func (r *Rollout) Rollout() (bool, error) {
 func (r *Rollout) UpdateService(svc *run.Service) (*run.Service, error) {
 	stable := DetectStableRevisionName(svc)
 	if stable == "" {
-		r.log.Info("Could not determine stable revision")
+		r.log.Info("could not determine stable revision")
 		return nil, nil
 	}
+	r.log.Debugf("%q is the stable revision", stable)
 
 	candidate := DetectCandidateRevisionName(svc, stable)
 	if candidate == "" {
-		r.log.Info("Could not determine candidate revision")
+		r.log.Info("could not determine candidate revision")
 		return nil, nil
 	}
+	r.log.Debugf("%q is the candidate revision", candidate)
 
 	svc = r.SplitTraffic(svc, stable, candidate)
 	svc = r.updateAnnotations(svc, stable, candidate)
@@ -98,6 +100,7 @@ func (r *Rollout) UpdateService(svc *run.Service) (*run.Service, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not update service %q", r.serviceName)
 	}
+	r.log.Debug("service succesfully updated")
 
 	return svc, nil
 }
@@ -108,6 +111,10 @@ func (r *Rollout) UpdateService(svc *run.Service) (*run.Service, error) {
 // traffic configuration for the candidate and stable revisions.
 // The method respects user-defined revision tags.
 func (r *Rollout) SplitTraffic(svc *run.Service, stable, candidate string) *run.Service {
+	r.log.WithFields(logrus.Fields{
+		"stable":    stable,
+		"candidate": candidate,
+	}).Debug("splitting traffic", stable, candidate)
 
 	var traffic []*run.TrafficTarget
 	var stablePercent int64
@@ -133,10 +140,10 @@ func (r *Rollout) SplitTraffic(svc *run.Service, stable, candidate string) *run.
 	traffic = append(traffic, &run.TrafficTarget{LatestRevision: true, Tag: LatestTag})
 
 	if !r.promoteToStable {
-		r.log.Infof("Assigning %d%% of the traffic to stable revision %s", stablePercent, stable)
-		r.log.Infof("Assigning %d%% of the traffic to candidate revision %s", candidateTraffic.Percent, candidate)
+		r.log.Infof("will assign %d%% of the traffic to stable revision %s", stablePercent, stable)
+		r.log.Infof("will assign %d%% of the traffic to candidate revision %s", candidateTraffic.Percent, candidate)
 	} else {
-		r.log.Infof("Making revision %s stable", candidate)
+		r.log.Infof("will make revision %s stable", candidate)
 	}
 
 	svc.Spec.Traffic = traffic

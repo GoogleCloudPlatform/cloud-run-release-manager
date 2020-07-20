@@ -53,10 +53,15 @@ func (steps stepFlags) String() string {
 }
 
 var (
+	flLoggingLevel  string
 	flCLI           bool
 	flHTTPAddr      string
 	flProject       string
 	flLabelSelector string
+
+	// Either service or label selection needed.
+	flService string
+	flLabel   string
 
 	// Empty array means all regions.
 	flRegions       []string
@@ -69,6 +74,7 @@ var (
 )
 
 func init() {
+	flag.StringVar(&flLoggingLevel, "verbosity", "info", "the logging level (e.g. debug)")
 	flag.BoolVar(&flCLI, "cli", false, "run as CLI application to manage rollout in intervals")
 	flag.StringVar(&flHTTPAddr, "http-addr", "", "listen on http portrun on request (e.g. :8080)")
 	flag.StringVar(&flProject, "project", "", "project in which the service is deployed")
@@ -86,6 +92,12 @@ func init() {
 
 func main() {
 	logger := logrus.New()
+	loggingLevel, err := logrus.ParseLevel(flLoggingLevel)
+	if err != nil {
+		logger.Fatalf("invalid logging level: %v", err)
+	}
+	logger.SetLevel(loggingLevel)
+
 	valid, err := flagsAreValid()
 	if !valid {
 		logger.Fatalf("invalid flags: %v", err)
@@ -128,10 +140,10 @@ func runCLI(logger *logrus.Logger, cfg *config.Config) {
 
 		changed, err := roll.Rollout()
 		if err != nil {
-			logger.Fatalf("Rollout failed: %v", err)
+			logger.Fatalf("rollout failed: %v", err)
 		}
 		if changed {
-			logger.Info("Rollout process succeeded")
+			logger.Info("rollout process succeeded")
 		}
 
 		duration := time.Duration(cfg.Strategy.Interval)
