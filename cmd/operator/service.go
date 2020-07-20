@@ -8,12 +8,14 @@ import (
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/config"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/rollout"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/api/run/v1"
 )
 
 // getTargetedServices returned a list of service records that match the target
 // configuration.
-func getTargetedServices(ctx context.Context, targets []*config.Target) ([]*rollout.ServiceRecord, error) {
+func getTargetedServices(ctx context.Context, logger *logrus.Logger, targets []*config.Target) ([]*rollout.ServiceRecord, error) {
+	logger.Debug("querying Cloud Run API to get all targeted services")
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -25,7 +27,7 @@ func getTargetedServices(ctx context.Context, targets []*config.Target) ([]*roll
 	)
 
 	for _, target := range targets {
-		regions, err := determineRegions(ctx, target)
+		regions, err := determineRegions(ctx, logger, target)
 		if err != nil {
 			return nil, errors.Wrap(err, "cannot determine regions")
 		}
@@ -33,9 +35,9 @@ func getTargetedServices(ctx context.Context, targets []*config.Target) ([]*roll
 		for _, region := range regions {
 			wg.Add(1)
 
-			go func(ctx context.Context, region, labelSelector string) {
+			go func(ctx context.Context, logger *logrus.Logger, region, labelSelector string) {
 				defer wg.Done()
-				svcs, err := getServicesByRegionAndLabel(ctx, target.Project, region, target.LabelSelector)
+				svcs, err := getServicesByRegionAndLabel(ctx, logger, target.Project, region, target.LabelSelector)
 				if err != nil {
 					retError = err
 					cancel()
@@ -48,7 +50,7 @@ func getTargetedServices(ctx context.Context, targets []*config.Target) ([]*roll
 					mu.Unlock()
 				}
 
-			}(ctx, region, target.LabelSelector)
+			}(ctx, logger, region, target.LabelSelector)
 		}
 	}
 
@@ -58,7 +60,13 @@ func getTargetedServices(ctx context.Context, targets []*config.Target) ([]*roll
 
 // getServicesByRegionAndLabel returns all the service records that match the
 // labelSelector in a specific region.
-func getServicesByRegionAndLabel(ctx context.Context, project, region, labelSelector string) ([]*run.Service, error) {
+func getServicesByRegionAndLabel(ctx context.Context, logger *logrus.Logger, project, region, labelSelector string) ([]*run.Service, error) {
+	lg := logger.WithFields(logrus.Fields{
+		"region":        region,
+		"labelSelector": labelSelector,
+	})
+
+	lg.Debug("querying Cloud Run services")
 	runclient, err := runapi.NewAPIClient(ctx, region)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initialize Cloud Run client")
@@ -69,6 +77,7 @@ func getServicesByRegionAndLabel(ctx context.Context, project, region, labelSele
 		return nil, errors.Wrapf(err, "failed to get services with label %q in region %q", labelSelector, region)
 	}
 
+	lg.WithField("n", len(svcs)).Debug("finished retrieving services from the API")
 	return svcs, nil
 }
 
@@ -76,16 +85,21 @@ func getServicesByRegionAndLabel(ctx context.Context, project, region, labelSele
 //
 // If the target configuration does not specify any regions, the entire list of
 // regions is retrieved from API.
-func determineRegions(ctx context.Context, target *config.Target) ([]string, error) {
+func determineRegions(ctx context.Context, logger *logrus.Logger, target *config.Target) ([]string, error) {
 	regions := target.Regions
 	if len(regions) != 0 {
+		logger.Debug("using predefined list of regions, skip querying from API")
 		return regions, nil
 	}
 
+	logger.Debug("retrieving all regions from the API")
+
 	regions, err := runapi.Regions(ctx, target.Project)
 	if err != nil {
-		return nil, errors.Wrap(err, "Cannot get list of regions from Cloud Run API")
+		return nil, errors.Wrap(err, "cannot get list of regions from Cloud Run API")
 	}
+
+	logger.WithField("n", len(regions)).Debug("finished retrieving regions from the API")
 	return regions, nil
 }
 

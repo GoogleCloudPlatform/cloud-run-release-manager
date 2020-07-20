@@ -79,7 +79,7 @@ func init() {
 	flag.StringVar(&flHTTPAddr, "http-addr", "", "listen on http portrun on request (e.g. :8080)")
 	flag.StringVar(&flProject, "project", "", "project in which the service is deployed")
 	flag.StringVar(&flLabelSelector, "label", "rollout-strategy=gradual", "filter services based on a label (e.g. team=backend)")
-	flag.StringVar(&flRegionsString, "regions", "us-east1", "the Cloud Run regions where the service should be looked at")
+	flag.StringVar(&flRegionsString, "regions", "", "the Cloud Run regions where the service should be looked at")
 	flag.Var(&flSteps, "step", "a percentage in traffic the candidate should go through")
 	flag.StringVar(&flStepsString, "steps", "5,20,50,80", "define steps in one flag separated by commas (e.g. 5,30,60)")
 	flag.Int64Var(&flInterval, "interval", 0, "the time between each rollout step")
@@ -116,14 +116,15 @@ func main() {
 		)
 	}
 
+	ctx := context.Background()
 	if flCLI {
-		runCLI(logger, cfg)
+		runCLI(ctx, logger, cfg)
 	}
 }
 
-func runCLI(logger *logrus.Logger, cfg *config.Config) {
+func runCLI(ctx context.Context, logger *logrus.Logger, cfg *config.Config) {
 	for {
-		services, err := getTargetedServices(context.Background(), cfg.Targets)
+		services, err := getTargetedServices(ctx, logger, cfg.Targets)
 		if err != nil {
 			log.Fatalf("failed to get targeted services %v", err)
 		}
@@ -132,7 +133,7 @@ func runCLI(logger *logrus.Logger, cfg *config.Config) {
 		}
 
 		// TODO: Handle all the filtered services
-		client, err := runapi.NewAPIClient(context.Background(), services[0].Region)
+		client, err := runapi.NewAPIClient(ctx, services[0].Region)
 		if err != nil {
 			logger.Fatal("failed to initialize Cloud Run API client")
 		}
