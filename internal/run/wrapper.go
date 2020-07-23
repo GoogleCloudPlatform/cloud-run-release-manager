@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/util"
 	"github.com/pkg/errors"
 	"google.golang.org/api/option"
 	"google.golang.org/api/run/v1"
@@ -67,7 +68,9 @@ func (a *API) ServicesWithLabelSelector(namespace string, labelSelector string) 
 
 // Regions gets the supported regions for the project.
 func Regions(ctx context.Context, project string) ([]string, error) {
+	logger := util.LoggerFromContext(ctx)
 	if len(regions) != 0 {
+		logger.Debug("using cached regions, skip querying from API")
 		return regions, nil
 	}
 

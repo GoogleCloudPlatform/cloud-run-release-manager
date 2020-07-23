@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	runapi "github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/run"
+	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/util"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/config"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/rollout"
 	"github.com/pkg/errors"
@@ -94,6 +95,8 @@ func determineRegions(ctx context.Context, logger *logrus.Logger, target *config
 
 	logger.Debug("retrieving all regions from the API")
 
+	lg := logrus.NewEntry(logger)
+	ctx = util.ContextWithLogger(ctx, lg)
 	regions, err := runapi.Regions(ctx, target.Project)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get list of regions from Cloud Run API")
