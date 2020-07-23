@@ -52,11 +52,12 @@ type Config struct {
 }
 
 // WithValues initializes a configuration with the given values.
-func WithValues(targets []*Target, steps []int64, interval int64) *Config {
+func WithValues(targets []*Target, steps []int64, interval int64, metrics []Metric) *Config {
 	return &Config{
 		Targets: targets,
 		Strategy: &Strategy{
 			Steps:    steps,
+			Metrics:  metrics,
 			Interval: interval,
 		},
 	}

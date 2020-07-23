@@ -18,7 +18,7 @@ func TestIsValid(t *testing.T) {
 			name: "correct config with label selector",
 			config: config.WithValues([]*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 60}, 20),
+			}, []int64{5, 30, 60}, 20, nil),
 			cliMode:  true,
 			expected: true,
 		},
@@ -27,7 +27,7 @@ func TestIsValid(t *testing.T) {
 			name: "missing project",
 			config: config.WithValues([]*config.Target{
 				config.NewTarget("", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 60}, 20),
+			}, []int64{5, 30, 60}, 20, nil),
 			cliMode:  true,
 			expected: false,
 		},
@@ -36,7 +36,7 @@ func TestIsValid(t *testing.T) {
 			name: "missing steps",
 			config: config.WithValues([]*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{}, 20),
+			}, []int64{}, 20, nil),
 			cliMode:  true,
 			expected: false,
 		},
@@ -45,7 +45,7 @@ func TestIsValid(t *testing.T) {
 			name: "steps not in order",
 			config: config.WithValues([]*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{30, 30, 60}, 20),
+			}, []int64{30, 30, 60}, 20, nil),
 			cliMode:  true,
 			expected: false,
 		},
@@ -54,7 +54,7 @@ func TestIsValid(t *testing.T) {
 			name: "step greater than 100",
 			config: config.WithValues([]*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 101}, 20),
+			}, []int64{5, 30, 101}, 20, nil),
 			cliMode:  true,
 			expected: false,
 		},
@@ -63,7 +63,7 @@ func TestIsValid(t *testing.T) {
 			name: "no interval for cli mode",
 			config: config.WithValues([]*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 60}, 0),
+			}, []int64{5, 30, 60}, 0, nil),
 			cliMode:  true,
 			expected: false,
 		},
@@ -72,7 +72,7 @@ func TestIsValid(t *testing.T) {
 			name: "empty label selector",
 			config: config.WithValues([]*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, ""),
-			}, []int64{5, 30, 60}, 20),
+			}, []int64{5, 30, 60}, 20, nil),
 			cliMode:  true,
 			expected: false,
 		},
