@@ -29,8 +29,7 @@ type Target struct {
 type Metric struct {
 	Type       MetricsCheck
 	Percentile float64
-	Min        float64
-	Max        float64
+	Threshold  float64
 }
 
 // Strategy is the steps and configuration for rollout.

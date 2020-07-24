@@ -197,17 +197,17 @@ func flagsAreValid() (bool, error) {
 // of config.Metric based on them.
 func healthCriteriaFromFlags(errorRate, latencyP99, latencyP95, latencyP50 float64) []config.Metric {
 	metrics := []config.Metric{
-		{Type: config.ErrorRateMetricsCheck, Max: errorRate},
+		{Type: config.ErrorRateMetricsCheck, Threshold: errorRate},
 	}
 
 	if latencyP99 > 0 {
-		metrics = append(metrics, config.Metric{Type: config.LatencyMetricsCheck, Percentile: 99, Max: latencyP99})
+		metrics = append(metrics, config.Metric{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: latencyP99})
 	}
 	if latencyP95 > 0 {
-		metrics = append(metrics, config.Metric{Type: config.LatencyMetricsCheck, Percentile: 95, Max: latencyP95})
+		metrics = append(metrics, config.Metric{Type: config.LatencyMetricsCheck, Percentile: 95, Threshold: latencyP95})
 	}
 	if latencyP50 > 0 {
-		metrics = append(metrics, config.Metric{Type: config.LatencyMetricsCheck, Percentile: 50, Max: latencyP50})
+		metrics = append(metrics, config.Metric{Type: config.LatencyMetricsCheck, Percentile: 50, Threshold: latencyP50})
 	}
 
 	return metrics
@@ -215,17 +215,17 @@ func healthCriteriaFromFlags(errorRate, latencyP99, latencyP95, latencyP50 float
 
 func printHealthCriteria(logger *logrus.Logger, healthCriteria []config.Metric) {
 	for _, criteria := range healthCriteria {
-		lg := logger.WithField("metricsType", criteria.Type)
+		lg := logger.WithFields(logrus.Fields{
+			"metricsType": criteria.Type,
+			"threshold":   criteria.Threshold,
+		})
 
 		switch criteria.Type {
 		case config.ErrorRateMetricsCheck:
-			lg.WithField("max", criteria.Max).Debug("found health criterion")
+			lg.Debug("found health criterion")
 			break
 		case config.LatencyMetricsCheck:
-			lg.WithFields(logrus.Fields{
-				"percentile": criteria.Percentile,
-				"max":        criteria.Max,
-			}).Debug("found health criterion")
+			lg.WithField("percentile", criteria.Percentile).Debug("found health criterion")
 			break
 		default:
 			lg.Debug("invalid health criterion")
