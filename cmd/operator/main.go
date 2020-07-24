@@ -23,10 +23,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics"
 	runapi "github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/run"
+	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/stackdriver"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/config"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/rollout"
-	stackdriver "github.com/TV4/logrus-stackdriver-formatter"
+	stackdriverFormatter "github.com/TV4/logrus-stackdriver-formatter"
 	isatty "github.com/mattn/go-isatty"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -107,8 +109,8 @@ func main() {
 	logger.SetLevel(loggingLevel)
 
 	if !isatty.IsTerminal(os.Stdout.Fd()) {
-		logger.Formatter = stackdriver.NewFormatter(
-			stackdriver.WithService(os.Getenv("K_SERVICE")),
+		logger.Formatter = stackdriverFormatter.NewFormatter(
+			stackdriverFormatter.WithService(os.Getenv("K_SERVICE")),
 		)
 	}
 
@@ -127,12 +129,17 @@ func main() {
 	}
 
 	ctx := context.Background()
+	metricsProvider, err := stackdriver.NewAPIClient(ctx, flProject)
+	if err != nil {
+		logger.Fatalf("failed to initialize metrics provider: %v", err)
+	}
+
 	if flCLI {
-		runCLI(ctx, logger, cfg)
+		runCLI(ctx, logger, metricsProvider, cfg)
 	}
 }
 
-func runCLI(ctx context.Context, logger *logrus.Logger, cfg *config.Config) {
+func runCLI(ctx context.Context, logger *logrus.Logger, metricsProvider metrics.Metrics, cfg *config.Config) {
 	for {
 		services, err := getTargetedServices(ctx, logger, cfg.Targets)
 		if err != nil {
@@ -147,7 +154,7 @@ func runCLI(ctx context.Context, logger *logrus.Logger, cfg *config.Config) {
 		if err != nil {
 			logger.Fatal("failed to initialize Cloud Run API client")
 		}
-		roll := rollout.New(client, services[0], cfg.Strategy).WithLogger(logger)
+		roll := rollout.New(client, metricsProvider, services[0], cfg.Strategy).WithLogger(logger)
 
 		changed, err := roll.Rollout()
 		if err != nil {

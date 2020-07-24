@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/run/mock"
+	metricsMocker "github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics/mock"
+	runMocker "github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/run/mock"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/config"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/rollout"
 	"github.com/google/go-cmp/cmp"
@@ -35,7 +36,8 @@ func generateService(opts *ServiceOpts) *run.Service {
 }
 
 func TestUpdateService(t *testing.T) {
-	runclient := &mock.RunAPI{}
+	runclient := &runMocker.RunAPI{}
+	metricsMock := &metricsMocker.Metrics{}
 	strategy := &config.Strategy{
 		Steps: []int64{10, 40, 70},
 	}
@@ -179,7 +181,7 @@ func TestUpdateService(t *testing.T) {
 		svc := generateService(opts)
 		svcRecord := &rollout.ServiceRecord{Service: svc}
 
-		r := rollout.New(runclient, svcRecord, strategy)
+		r := rollout.New(runclient, metricsMock, svcRecord, strategy)
 
 		t.Run(test.name, func(t *testing.T) {
 			svc, err := r.UpdateService(svc)
@@ -197,7 +199,8 @@ func TestUpdateService(t *testing.T) {
 }
 
 func TestSplitTraffic(t *testing.T) {
-	runclient := &mock.RunAPI{}
+	runclient := &runMocker.RunAPI{}
+	metricsMock := &metricsMocker.Metrics{}
 	strategy := &config.Strategy{
 		Steps: []int64{5, 30, 60},
 	}
@@ -316,7 +319,7 @@ func TestSplitTraffic(t *testing.T) {
 		svc := generateService(opts)
 		svcRecord := &rollout.ServiceRecord{Service: svc}
 
-		r := rollout.New(runclient, svcRecord, strategy)
+		r := rollout.New(runclient, metricsMock, svcRecord, strategy)
 
 		t.Run(test.name, func(t *testing.T) {
 			svc = r.SplitTraffic(svc, test.stable, test.candidate)
