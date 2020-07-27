@@ -49,7 +49,6 @@ func NewProvider(ctx context.Context, project string) (*Provider, error) {
 // RequestCount count returns the number of requests for the given offset and
 // query.
 func (p *Provider) RequestCount(ctx context.Context, query metrics.Query, offset time.Duration) (int64, error) {
-	logger := util.LoggerFromContext(ctx)
 	query = addFilterToQuery(query, "metric.type", requestCount)
 	endTime := time.Now()
 	endTimeString := endTime.Format(time.RFC3339Nano)
@@ -66,29 +65,24 @@ func (p *Provider) RequestCount(ctx context.Context, query metrics.Query, offset
 		AggregationGroupByFields("resource.labels.service_name").
 		AggregationCrossSeriesReducer("REDUCE_SUM")
 
-	logger.WithFields(logrus.Fields{
+	logger := util.LoggerFromContext(ctx).WithFields(logrus.Fields{
 		"intervalStartTime": startTimeString,
 		"intervalEndTime":   endTimeString,
-	}).Debug("querying request count from Cloud Monitoring API")
-	resp, err := req.Do()
+		"metrics":           "request-count",
+	})
+	logger.Debug("querying Cloud Monitoring API")
+	timeSeries, err := makeRequestForTimeSeries(logger, req)
 	if err != nil {
-		return 0, errors.Wrap(err, "error when retrieving time series")
-	}
-	if len(resp.ExecutionErrors) != 0 {
-		for _, execError := range resp.ExecutionErrors {
-			logger.WithField("message", execError.Message).Warn("execution error occurred")
-		}
-		return 0, errors.New("execution errors occurred")
+		return 0, errors.Wrap(err, "error when querying for time series")
 	}
 
 	// This happens when no request was made during the given offset.
-	if len(resp.TimeSeries) == 0 {
+	if len(timeSeries) == 0 {
 		return 0, nil
 	}
-
 	// The request count is aggregated for the entire service, so only one time
 	// series and a point is returned. There's no need for a loop.
-	series := resp.TimeSeries[0]
+	series := timeSeries[0]
 	if len(series.Points) == 0 {
 		return 0, errors.New("no data point was retrieved")
 	}
@@ -99,71 +93,91 @@ func (p *Provider) RequestCount(ctx context.Context, query metrics.Query, offset
 func (p *Provider) Latency(ctx context.Context, query metrics.Query, offset time.Duration, alignReduceType metrics.AlignReduce) (float64, error) {
 	query = addFilterToQuery(query, "metric.type", requestLatencies)
 	endTime := time.Now()
+	endTimeString := endTime.Format(time.RFC3339Nano)
 	startTime := endTime.Add(-1 * offset)
+	startTimeString := startTime.Format(time.RFC3339Nano)
 	aligner, reducer := alignerAndReducer(alignReduceType)
 	offsetString := fmt.Sprintf("%fs", offset.Seconds())
 
 	req := p.metricsClient.Projects.TimeSeries.List("projects/" + p.project).
 		Filter(query.Query()).
-		IntervalStartTime(startTime.Format(time.RFC3339Nano)).
-		IntervalEndTime(endTime.Format(time.RFC3339Nano)).
+		IntervalStartTime(startTimeString).
+		IntervalEndTime(endTimeString).
 		AggregationAlignmentPeriod(offsetString).
 		AggregationPerSeriesAligner(aligner).
-		AggregationGroupByFields("metric.labels.response_code_class").
+		AggregationGroupByFields("resource.labels.service_name").
 		AggregationCrossSeriesReducer(reducer)
 
-	resp, err := req.Do()
+	logger := util.LoggerFromContext(ctx).WithFields(logrus.Fields{
+		"intervalStartTime": startTimeString,
+		"intervalEndTime":   endTimeString,
+		"metrics":           "latency",
+		"aligner":           aligner,
+		"reducer":           reducer,
+	})
+	logger.Debug("querying Cloud Monitoring API")
+	timeSeries, err := makeRequestForTimeSeries(logger, req)
 	if err != nil {
-		return 0, errors.Wrap(err, "error when retrieving time series")
-	}
-	if len(resp.ExecutionErrors) != 0 {
-		return 0, errors.Errorf("execution errors occurred: %v", resp.ExecutionErrors)
+		return 0, errors.Wrap(err, "error when querying for time series")
 	}
 
-	return latencyForCodeClass(resp.TimeSeries, "2xx")
+	// This happens when no request was made during the given offset.
+	if len(timeSeries) == 0 {
+		return 0, errors.New("no request in interval")
+	}
+	// The request count is aggregated for the entire service, so only one time
+	// series and a point is returned. There's no need for a loop.
+	series := timeSeries[0]
+	if len(series.Points) == 0 {
+		return 0, errors.New("no data point was retrieved")
+	}
+	return *(series.Points[0].Value.DoubleValue), nil
 }
 
 // ErrorRate returns the rate of 5xx errors for the resource matching the filter.
 func (p *Provider) ErrorRate(ctx context.Context, query metrics.Query, offset time.Duration) (float64, error) {
 	query = addFilterToQuery(query, "metric.type", requestCount)
 	endTime := time.Now()
+	endTimeString := endTime.Format(time.RFC3339Nano)
 	startTime := endTime.Add(-1 * offset)
+	startTimeString := startTime.Format(time.RFC3339Nano)
 	offsetString := fmt.Sprintf("%fs", offset.Seconds())
 
 	req := p.metricsClient.Projects.TimeSeries.List("projects/" + p.project).
 		Filter(query.Query()).
-		IntervalStartTime(startTime.Format(time.RFC3339Nano)).
-		IntervalEndTime(endTime.Format(time.RFC3339Nano)).
+		IntervalStartTime(startTimeString).
+		IntervalEndTime(endTimeString).
 		AggregationAlignmentPeriod(offsetString).
 		AggregationPerSeriesAligner("ALIGN_DELTA").
 		AggregationGroupByFields("metric.labels.response_code_class").
 		AggregationCrossSeriesReducer("REDUCE_SUM")
 
-	resp, err := req.Do()
+	logger := util.LoggerFromContext(ctx).WithFields(logrus.Fields{
+		"intervalStartTime": startTimeString,
+		"intervalEndTime":   endTimeString,
+		"metrics":           "error-rate",
+	})
+	logger.Debug("querying Cloud Monitoring API")
+	timeSeries, err := makeRequestForTimeSeries(logger, req)
 	if err != nil {
-		return 0, errors.Wrap(err, "error when retrieving time series")
+		return 0, errors.Wrap(err, "error when querying for time series")
 	}
-	if len(resp.ExecutionErrors) != 0 {
-		return 0, errors.Errorf("execution errors occurred: %v", resp.ExecutionErrors)
-	}
-
-	return calculateErrorResponseRate(resp.TimeSeries)
+	return calculateErrorResponseRate(timeSeries)
 }
 
-// latencyForCodeClass retrieves the latency for a given response code class
-// (e.g. 2xx, 5xx, etc.)
-func latencyForCodeClass(timeSeries []*monitoring.TimeSeries, codeClass string) (float64, error) {
-	var latency float64
-	for _, series := range timeSeries {
-		// Because the interval and the series aligner are the same, only one
-		// point is returned per time series.
-		if series.Metric.Labels["response_code_class"] == codeClass {
-			latency = *(series.Points[0].Value.DoubleValue)
-			break
+func makeRequestForTimeSeries(logger *logrus.Entry, req *monitoring.ProjectsTimeSeriesListCall) ([]*monitoring.TimeSeries, error) {
+	resp, err := req.Do()
+	if err != nil {
+		return nil, errors.Wrap(err, "error when retrieving time series")
+	}
+	if len(resp.ExecutionErrors) != 0 {
+		for _, execError := range resp.ExecutionErrors {
+			logger.WithField("message", execError.Message).Warn("execution error occurred")
 		}
+		return nil, errors.Errorf("execution errors occurred")
 	}
 
-	return latency, nil
+	return resp.TimeSeries, nil
 }
 
 // calculateErrorResponseRate calculates the percentage of 5xx error response.
@@ -171,7 +185,6 @@ func latencyForCodeClass(timeSeries []*monitoring.TimeSeries, codeClass string) 
 // It obtains all the successful responses (2xx) and the error responses (5xx),
 // add them up to form a 'total'. Then, it divides the number of error responses
 // by the total.
-// It ignores any other type of responses (e.g. 4xx).
 func calculateErrorResponseRate(timeSeries []*monitoring.TimeSeries) (float64, error) {
 	var errorResponseCount, successfulResponseCount int64
 	for _, series := range timeSeries {
@@ -193,7 +206,6 @@ func calculateErrorResponseRate(timeSeries []*monitoring.TimeSeries) (float64, e
 	}
 
 	rate := float64(errorResponseCount) / float64(totalResponses)
-
 	return rate, nil
 }
 
