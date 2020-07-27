@@ -133,7 +133,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	metricsProvider, err := stackdriver.NewAPIClient(ctx, flProject)
+	metricsProvider, err := stackdriver.NewProvider(ctx, flProject)
 	if err != nil {
 		logger.Fatalf("failed to initialize metrics provider: %v", err)
 	}
@@ -143,7 +143,7 @@ func main() {
 	}
 }
 
-func runCLI(ctx context.Context, logger *logrus.Logger, metricsProvider metrics.Metrics, cfg *config.Config) {
+func runCLI(ctx context.Context, logger *logrus.Logger, metricsProvider metrics.Provider, cfg *config.Config) {
 	for {
 		services, err := getTargetedServices(ctx, logger, cfg.Targets)
 		if err != nil {

@@ -16,10 +16,10 @@ import (
 	monitoring "google.golang.org/api/monitoring/v3"
 )
 
-// API is a wrapper for the Cloud Monitoring package.
-type API struct {
-	MetricClient *monitoring.Service
-	Project      string
+// Provider is a metrics provider for Cloud Monitoring.
+type Provider struct {
+	metricsClient *monitoring.Service
+	project       string
 }
 
 // Query is the filter used to retrieve metrics data.
@@ -33,22 +33,22 @@ const (
 	requestCount     = "run.googleapis.com/request_count"
 )
 
-// NewAPIClient initializes
-func NewAPIClient(ctx context.Context, project string) (*API, error) {
+// NewProvider initializes the provider for Cloud Monitoring.
+func NewProvider(ctx context.Context, project string) (*Provider, error) {
 	client, err := monitoring.NewService(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not initialize Cloud Metics client")
 	}
 
-	return &API{
-		MetricClient: client,
-		Project:      project,
+	return &Provider{
+		metricsClient: client,
+		project:       project,
 	}, nil
 }
 
 // RequestCount count returns the number of requests for the given offset and
 // query.
-func (a *API) RequestCount(ctx context.Context, query metrics.Query, offset time.Duration) (int64, error) {
+func (p *Provider) RequestCount(ctx context.Context, query metrics.Query, offset time.Duration) (int64, error) {
 	logger := util.LoggerFromContext(ctx)
 	query = addFilterToQuery(query, "metric.type", requestCount)
 	endTime := time.Now()
@@ -57,7 +57,7 @@ func (a *API) RequestCount(ctx context.Context, query metrics.Query, offset time
 	startTimeString := startTime.Format(time.RFC3339Nano)
 	offsetString := fmt.Sprintf("%fs", offset.Seconds())
 
-	req := a.MetricClient.Projects.TimeSeries.List("projects/" + a.Project).
+	req := p.metricsClient.Projects.TimeSeries.List("projects/" + p.project).
 		Filter(query.Query()).
 		IntervalStartTime(startTimeString).
 		IntervalEndTime(endTimeString).
@@ -96,14 +96,14 @@ func (a *API) RequestCount(ctx context.Context, query metrics.Query, offset time
 }
 
 // Latency returns the latency for the resource matching the filter.
-func (a *API) Latency(ctx context.Context, query metrics.Query, offset time.Duration, alignReduceType metrics.AlignReduce) (float64, error) {
+func (p *Provider) Latency(ctx context.Context, query metrics.Query, offset time.Duration, alignReduceType metrics.AlignReduce) (float64, error) {
 	query = addFilterToQuery(query, "metric.type", requestLatencies)
 	endTime := time.Now()
 	startTime := endTime.Add(-1 * offset)
 	aligner, reducer := alignerAndReducer(alignReduceType)
 	offsetString := fmt.Sprintf("%fs", offset.Seconds())
 
-	req := a.MetricClient.Projects.TimeSeries.List("projects/" + a.Project).
+	req := p.metricsClient.Projects.TimeSeries.List("projects/" + p.project).
 		Filter(query.Query()).
 		IntervalStartTime(startTime.Format(time.RFC3339Nano)).
 		IntervalEndTime(endTime.Format(time.RFC3339Nano)).
@@ -124,13 +124,13 @@ func (a *API) Latency(ctx context.Context, query metrics.Query, offset time.Dura
 }
 
 // ErrorRate returns the rate of 5xx errors for the resource matching the filter.
-func (a *API) ErrorRate(ctx context.Context, query metrics.Query, offset time.Duration) (float64, error) {
+func (p *Provider) ErrorRate(ctx context.Context, query metrics.Query, offset time.Duration) (float64, error) {
 	query = addFilterToQuery(query, "metric.type", requestCount)
 	endTime := time.Now()
 	startTime := endTime.Add(-1 * offset)
 	offsetString := fmt.Sprintf("%fs", offset.Seconds())
 
-	req := a.MetricClient.Projects.TimeSeries.List("projects/" + a.Project).
+	req := p.metricsClient.Projects.TimeSeries.List("projects/" + p.project).
 		Filter(query.Query()).
 		IntervalStartTime(startTime.Format(time.RFC3339Nano)).
 		IntervalEndTime(endTime.Format(time.RFC3339Nano)).

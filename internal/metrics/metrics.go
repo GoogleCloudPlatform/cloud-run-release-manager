@@ -23,8 +23,8 @@ const (
 	Align50Reduce50             = 3
 )
 
-// Metrics represents a monitoring API such as Stackdriver.
-type Metrics interface {
+// Provider represents a metrics Provider such as Stackdriver.
+type Provider interface {
 	// Returns the number of requests for the given offset and query.
 	RequestCount(ctx context.Context, query Query, offset time.Duration) (int64, error)
 

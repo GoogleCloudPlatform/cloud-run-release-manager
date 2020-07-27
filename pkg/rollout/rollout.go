@@ -21,7 +21,7 @@ type ServiceRecord struct {
 // Rollout is the rollout manager.
 type Rollout struct {
 	runClient       runapi.Client
-	metricsProvider metrics.Metrics
+	metricsProvider metrics.Provider
 	service         *run.Service
 	serviceName     string
 	project         string
@@ -41,7 +41,7 @@ const (
 )
 
 // New returns a new rollout manager.
-func New(client runapi.Client, metricsProvider metrics.Metrics, svcRecord *ServiceRecord, strategy *config.Strategy) *Rollout {
+func New(client runapi.Client, metricsProvider metrics.Provider, svcRecord *ServiceRecord, strategy *config.Strategy) *Rollout {
 	logger := logrus.New()
 	logger.SetOutput(ioutil.Discard)
 
