@@ -9,6 +9,9 @@ import (
 
 // Metrics is a mock implementation of metrics.Metrics.
 type Metrics struct {
+	RequestCountFn      func(ctx context.Context, query metrics.Query, offset time.Duration) (int64, error)
+	RequestCountInvoked bool
+
 	LatencyFn      func(ctx context.Context, query metrics.Query, offset time.Duration, alignReduceType metrics.AlignReduce) (float64, error)
 	LatencyInvoked bool
 
@@ -18,6 +21,12 @@ type Metrics struct {
 
 // Query is a mock implementation of metrics.Query.
 type Query struct{}
+
+// RequestCount invokes the mock implementation and marks the function as invoked.
+func (m *Metrics) RequestCount(ctx context.Context, query metrics.Query, offset time.Duration) (int64, error) {
+	m.RequestCountInvoked = true
+	return m.RequestCountFn(ctx, query, offset)
+}
 
 // Latency invokes the mock implementation and marks the function as invoked.
 func (m *Metrics) Latency(ctx context.Context, query metrics.Query, offset time.Duration, alignReduceType metrics.AlignReduce) (float64, error) {
