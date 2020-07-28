@@ -7,34 +7,36 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Query is the filter used to retrieve metrics data.
-type Query interface {
-	Query() string
-}
-
 // AlignReduce is the type to enumerate allowed combinations of per series
 // aligner and cross series reducer.
 type AlignReduce int32
 
 // Series aligner and cross series reducer types (for latency).
 const (
-	Align99Reduce99 AlignReduce = 1
-	Align95Reduce95             = 2
-	Align50Reduce50             = 3
+	Unknown AlignReduce = iota
+	Align99Reduce99
+	Align95Reduce95
+	Align50Reduce50
 )
 
 // Provider represents a metrics Provider such as Stackdriver.
 type Provider interface {
+	// Sets the candidate revision name for which the provider should get
+	// metrics.
+	// TODO: Consider removing this method and making revisionName part of other
+	// method signatures.
+	SetCandidateRevision(revisionName string)
+
 	// Returns the number of requests for the given offset and query.
-	RequestCount(ctx context.Context, query Query, offset time.Duration) (int64, error)
+	RequestCount(ctx context.Context, offset time.Duration) (int64, error)
 
 	// Returns the request latency after applying the specified series aligner
 	// and cross series reducer. The result is in milliseconds.
-	Latency(ctx context.Context, query Query, offset time.Duration, alignReduceType AlignReduce) (float64, error)
+	Latency(ctx context.Context, offset time.Duration, alignReduceType AlignReduce) (float64, error)
 
 	// Gets all the server responses and calculates the error rate by performing
 	// the operation (5xx responses / all responses).
-	ErrorRate(ctx context.Context, query Query, offset time.Duration) (float64, error)
+	ErrorRate(ctx context.Context, offset time.Duration) (float64, error)
 }
 
 // PercentileToAlignReduce takes a percentile value maps it to a AlignReduce

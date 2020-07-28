@@ -171,7 +171,7 @@ func handleRollout(ctx context.Context, logger *logrus.Logger, service *rollout.
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize Cloud Run API client")
 	}
-	metricsProvider, err := stackdriver.NewProvider(ctx, flProject)
+	metricsProvider, err := stackdriver.NewProvider(ctx, service.Project, service.Region, service.Metadata.Name)
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize metrics provider")
 	}

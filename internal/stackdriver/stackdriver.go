@@ -12,19 +12,19 @@ import (
 
 	// TODO: Migrate to cloud.google.com/go/monitoring/apiv3/v2 once RPC for MQL
 	// query is added (https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.timeSeries/query).
-
 	monitoring "google.golang.org/api/monitoring/v3"
 )
+
+// query is the filter used to retrieve metrics data.
+type query string
 
 // Provider is a metrics provider for Cloud Monitoring.
 type Provider struct {
 	metricsClient *monitoring.Service
 	project       string
-}
 
-// Query is the filter used to retrieve metrics data.
-type Query struct {
-	filter string
+	// query is used to filter the metrics for the wanted resource.
+	query
 }
 
 // Metric types.
@@ -34,7 +34,7 @@ const (
 )
 
 // NewProvider initializes the provider for Cloud Monitoring.
-func NewProvider(ctx context.Context, project string) (*Provider, error) {
+func NewProvider(ctx context.Context, project string, region string, serviceName string) (*Provider, error) {
 	client, err := monitoring.NewService(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not initialize Cloud Metics client")
@@ -43,13 +43,19 @@ func NewProvider(ctx context.Context, project string) (*Provider, error) {
 	return &Provider{
 		metricsClient: client,
 		project:       project,
+		query:         newQuery(project, region, serviceName),
 	}, nil
 }
 
-// RequestCount count returns the number of requests for the given offset and
-// query.
-func (p *Provider) RequestCount(ctx context.Context, query metrics.Query, offset time.Duration) (int64, error) {
-	query = addFilterToQuery(query, "metric.type", requestCount)
+// SetCandidateRevision sets the candidate revision name for which the provider
+// should get metrics.
+func (p *Provider) SetCandidateRevision(revisionName string) {
+	p.query = p.query.addFilter("resource.labels.revision_name", revisionName)
+}
+
+// RequestCount count returns the number of requests for the given offset.
+func (p *Provider) RequestCount(ctx context.Context, offset time.Duration) (int64, error) {
+	query := p.addFilter("metric.type", requestCount)
 	endTime := time.Now()
 	endTimeString := endTime.Format(time.RFC3339Nano)
 	startTime := endTime.Add(-1 * offset)
@@ -57,7 +63,7 @@ func (p *Provider) RequestCount(ctx context.Context, query metrics.Query, offset
 	offsetString := fmt.Sprintf("%fs", offset.Seconds())
 
 	req := p.metricsClient.Projects.TimeSeries.List("projects/" + p.project).
-		Filter(query.Query()).
+		Filter(string(query)).
 		IntervalStartTime(startTimeString).
 		IntervalEndTime(endTimeString).
 		AggregationAlignmentPeriod(offsetString).
@@ -89,9 +95,9 @@ func (p *Provider) RequestCount(ctx context.Context, query metrics.Query, offset
 	return *(series.Points[0].Value.Int64Value), nil
 }
 
-// Latency returns the latency for the resource matching the filter.
-func (p *Provider) Latency(ctx context.Context, query metrics.Query, offset time.Duration, alignReduceType metrics.AlignReduce) (float64, error) {
-	query = addFilterToQuery(query, "metric.type", requestLatencies)
+// Latency returns the latency for the resource for the given offset.
+func (p *Provider) Latency(ctx context.Context, offset time.Duration, alignReduceType metrics.AlignReduce) (float64, error) {
+	query := p.query.addFilter("metric.type", requestLatencies)
 	endTime := time.Now()
 	endTimeString := endTime.Format(time.RFC3339Nano)
 	startTime := endTime.Add(-1 * offset)
@@ -100,7 +106,7 @@ func (p *Provider) Latency(ctx context.Context, query metrics.Query, offset time
 	offsetString := fmt.Sprintf("%fs", offset.Seconds())
 
 	req := p.metricsClient.Projects.TimeSeries.List("projects/" + p.project).
-		Filter(query.Query()).
+		Filter(string(query)).
 		IntervalStartTime(startTimeString).
 		IntervalEndTime(endTimeString).
 		AggregationAlignmentPeriod(offsetString).
@@ -134,9 +140,9 @@ func (p *Provider) Latency(ctx context.Context, query metrics.Query, offset time
 	return *(series.Points[0].Value.DoubleValue), nil
 }
 
-// ErrorRate returns the rate of 5xx errors for the resource matching the filter.
-func (p *Provider) ErrorRate(ctx context.Context, query metrics.Query, offset time.Duration) (float64, error) {
-	query = addFilterToQuery(query, "metric.type", requestCount)
+// ErrorRate returns the rate of 5xx errors for the resource in the given offset.
+func (p *Provider) ErrorRate(ctx context.Context, offset time.Duration) (float64, error) {
+	query := p.query.addFilter("metric.type", requestCount)
 	endTime := time.Now()
 	endTimeString := endTime.Format(time.RFC3339Nano)
 	startTime := endTime.Add(-1 * offset)
@@ -144,7 +150,7 @@ func (p *Provider) ErrorRate(ctx context.Context, query metrics.Query, offset ti
 	offsetString := fmt.Sprintf("%fs", offset.Seconds())
 
 	req := p.metricsClient.Projects.TimeSeries.List("projects/" + p.project).
-		Filter(query.Query()).
+		Filter(string(query)).
 		IntervalStartTime(startTimeString).
 		IntervalEndTime(endTimeString).
 		AggregationAlignmentPeriod(offsetString).
@@ -228,31 +234,23 @@ func alignerAndReducer(alignReduceType metrics.AlignReduce) (aligner string, red
 	return
 }
 
-// NewQuery initializes a query.
-func NewQuery(project, region, serviceName, revisionName string) Query {
-	return Query{}.addFilter("resource.labels.project_id", project).
+// newQuery initializes a query.
+func newQuery(project, region, serviceName string) query {
+	var q query
+	return q.addFilter("resource.labels.project_id", project).
 		addFilter("resource.labels.location", region).
-		addFilter("resource.labels.service_name", serviceName).
-		addFilter("resource.labels.revision_name", revisionName)
-}
-
-// Query returns the string representation of the query.
-func (q Query) Query() string {
-	return q.filter
+		addFilter("resource.labels.service_name", serviceName)
 }
 
 // addFilter adds a filter to the query.
-func (q Query) addFilter(key, value string) Query {
-	if q.filter != "" {
-		q.filter += " AND "
+//
+// TODO: Support field-based filters, so the query string is generated based on
+// the fields instead of appending a filter everytime this method is called.
+func (q query) addFilter(key, value string) query {
+	if q != "" {
+		q += " AND "
 	}
-	q.filter += fmt.Sprintf("%s=%q", key, value)
+	q += query(fmt.Sprintf("%s=%q", key, value))
 
 	return q
-}
-
-func addFilterToQuery(query metrics.Query, key, value string) Query {
-	q := query.(Query)
-
-	return q.addFilter(key, value)
 }

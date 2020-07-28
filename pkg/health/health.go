@@ -42,11 +42,11 @@ type CheckResult struct {
 //
 // Otherwise, all metrics criteria are checked to determine if the revision is
 // healthy.
-func Diagnose(ctx context.Context, provider metrics.Provider, query metrics.Query,
-	offset time.Duration, minRequests int64, healthCriteria []config.Metric) (*Diagnosis, error) {
+func Diagnose(ctx context.Context, provider metrics.Provider, offset time.Duration,
+	minRequests int64, healthCriteria []config.Metric) (*Diagnosis, error) {
 
 	logger := util.LoggerFromContext(ctx)
-	metricsValues, err := CollectMetrics(ctx, provider, query, offset, healthCriteria)
+	metricsValues, err := CollectMetrics(ctx, provider, offset, healthCriteria)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not collect metrics")
 	}
@@ -80,7 +80,7 @@ func Diagnose(ctx context.Context, provider metrics.Provider, query metrics.Quer
 
 // CollectMetrics returns an array of values collected for each of the specified
 // metrics criteria.
-func CollectMetrics(ctx context.Context, provider metrics.Provider, query metrics.Query, offset time.Duration, healthCriteria []config.Metric) ([]float64, error) {
+func CollectMetrics(ctx context.Context, provider metrics.Provider, offset time.Duration, healthCriteria []config.Metric) ([]float64, error) {
 	logger := util.LoggerFromContext(ctx)
 	logger.Debug("start collecting metrics")
 	var values []float64
@@ -90,10 +90,10 @@ func CollectMetrics(ctx context.Context, provider metrics.Provider, query metric
 
 		switch criteria.Type {
 		case config.LatencyMetricsCheck:
-			value, err = latency(ctx, provider, query, offset, criteria.Percentile)
+			value, err = latency(ctx, provider, offset, criteria.Percentile)
 			break
 		case config.ErrorRateMetricsCheck:
-			value, err = errorRatePercent(ctx, provider, query, offset)
+			value, err = errorRatePercent(ctx, provider, offset)
 			break
 		default:
 			return nil, errors.Errorf("unimplemented metrics %q", criteria.Type)
@@ -126,7 +126,7 @@ func determineResult(metricsType config.MetricsCheck, threshold float64, actualV
 }
 
 // latency returns the latency for the given offset and percentile.
-func latency(ctx context.Context, provider metrics.Provider, query metrics.Query, offset time.Duration, percentile float64) (float64, error) {
+func latency(ctx context.Context, provider metrics.Provider, offset time.Duration, percentile float64) (float64, error) {
 	alignerReducer, err := metrics.PercentileToAlignReduce(percentile)
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to parse percentile")
@@ -134,7 +134,7 @@ func latency(ctx context.Context, provider metrics.Provider, query metrics.Query
 
 	logger := util.LoggerFromContext(ctx).WithField("percentile", percentile)
 	logger.Debug("querying for latency metrics")
-	latency, err := provider.Latency(ctx, query, offset, alignerReducer)
+	latency, err := provider.Latency(ctx, offset, alignerReducer)
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to get latency metrics")
 	}
@@ -144,10 +144,10 @@ func latency(ctx context.Context, provider metrics.Provider, query metrics.Query
 }
 
 // errorRatePercent returns the percentage of errors during the given offset.
-func errorRatePercent(ctx context.Context, provider metrics.Provider, query metrics.Query, offset time.Duration) (float64, error) {
+func errorRatePercent(ctx context.Context, provider metrics.Provider, offset time.Duration) (float64, error) {
 	logger := util.LoggerFromContext(ctx)
 	logger.Debug("querying for error rate metrics")
-	rate, err := provider.ErrorRate(ctx, query, offset)
+	rate, err := provider.ErrorRate(ctx, offset)
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to get error rate metrics")
 	}

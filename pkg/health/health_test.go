@@ -14,16 +14,15 @@ import (
 
 func TestDiagnose(t *testing.T) {
 	metricsMock := &metricsMocker.Metrics{}
-	metricsMock.LatencyFn = func(ctx context.Context, query metrics.Query, offset time.Duration, alignReduceType metrics.AlignReduce) (float64, error) {
+	metricsMock.LatencyFn = func(ctx context.Context, offset time.Duration, alignReduceType metrics.AlignReduce) (float64, error) {
 		return 500, nil
 	}
-	metricsMock.ErrorRateFn = func(ctx context.Context, query metrics.Query, offset time.Duration) (float64, error) {
+	metricsMock.ErrorRateFn = func(ctx context.Context, offset time.Duration) (float64, error) {
 		return 0.01, nil
 	}
 
 	tests := []struct {
 		name           string
-		query          metrics.Query
 		offset         time.Duration
 		minRequests    int64
 		healthCriteria []config.Metric
@@ -31,7 +30,6 @@ func TestDiagnose(t *testing.T) {
 	}{
 		{
 			name:        "healthy revision",
-			query:       metricsMocker.Query{},
 			offset:      5 * time.Minute,
 			minRequests: 1000,
 			healthCriteria: []config.Metric{
@@ -56,7 +54,6 @@ func TestDiagnose(t *testing.T) {
 		},
 		{
 			name:   "barely healthy revision",
-			query:  metricsMocker.Query{},
 			offset: 5 * time.Minute,
 			healthCriteria: []config.Metric{
 				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 500},
@@ -80,7 +77,6 @@ func TestDiagnose(t *testing.T) {
 		},
 		{
 			name:        "unhealthy revision, miss latency",
-			query:       metricsMocker.Query{},
 			offset:      5 * time.Minute,
 			minRequests: 1000,
 			healthCriteria: []config.Metric{
@@ -99,7 +95,6 @@ func TestDiagnose(t *testing.T) {
 		},
 		{
 			name:        "unhealthy revision, miss error rate",
-			query:       metricsMocker.Query{},
 			offset:      5 * time.Minute,
 			minRequests: 1000,
 			healthCriteria: []config.Metric{
@@ -121,7 +116,7 @@ func TestDiagnose(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			diagnosis, _ := health.Diagnose(ctx, metricsMock, test.query, test.offset, test.minRequests, test.healthCriteria)
+			diagnosis, _ := health.Diagnose(ctx, metricsMock, test.offset, test.minRequests, test.healthCriteria)
 			assert.Equal(t, test.expected, diagnosis)
 		})
 	}
