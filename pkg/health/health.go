@@ -37,63 +37,72 @@ type CheckResult struct {
 
 // Diagnose attempts to determine the health of a revision.
 //
-// If the minimum number of requests is not met, then health cannot be
-// determined and Diagnosis.EnoughRequests is set to false.
+// If no health criteria is specified or the size of the health criteria and the
+// actual values are not the same, the diagnosis is Unknown and an error is
+// returned.
 //
-// Otherwise, all metrics criteria are checked to determine if the revision is
-// healthy.
-func Diagnose(ctx context.Context, provider metrics.Provider, offset time.Duration,
-	minRequests int64, healthCriteria []config.Metric) (*Diagnosis, error) {
-
+// If the minimum number of requests is not met, then health cannot be
+// determined and diagnosis is Inconclusive.
+//
+// Otherwise, all metrics criteria are checked to determine whether the revision
+// is healthy or not.
+func Diagnose(ctx context.Context, healthCriteria []config.Metric, actualValues []float64) (Diagnosis, error) {
 	logger := util.LoggerFromContext(ctx)
-	metricsValues, err := CollectMetrics(ctx, provider, offset, healthCriteria)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not collect metrics")
+	if len(healthCriteria) != len(actualValues) {
+		return Diagnosis{Unknown, nil}, errors.New("the size of health criteria is not the same to the size of the actual metrics values")
+	}
+	if len(healthCriteria) == 0 {
+		return Diagnosis{Unknown, nil}, errors.New("health criteria must be specified")
 	}
 
-	overallResult := Healthy
+	diagnosis := Unknown
 	var results []CheckResult
-	for i, criteria := range healthCriteria {
+	for i, value := range actualValues {
+		criteria := healthCriteria[i]
 		logger := logger.WithFields(logrus.Fields{
 			"metricsType": criteria.Type,
 			"percentile":  criteria.Percentile,
 			"threshold":   criteria.Threshold,
-			"actualValue": metricsValues[i],
+			"actualValue": value,
 		})
 
-		result := determineResult(criteria.Type, criteria.Threshold, metricsValues[i])
-		results = append(results, result)
-		if result.IsCriteriaMet {
-			logger.Debug("met criteria")
+		result := CheckResult{Threshold: criteria.Threshold, ActualValue: value}
+		if !isCriteriaMet(criteria.Type, criteria.Threshold, value) {
+			logger.Debug("unmet criterion")
+			diagnosis = Unhealthy
+			results = append(results, result)
 			continue
 		}
 
-		overallResult = Unhealthy
-		logger.Debug("unmet criteria")
+		// Only switch to healthy once a first criteria is met.
+		if diagnosis == Unknown {
+			diagnosis = Healthy
+		}
+		result.IsCriteriaMet = true
+		results = append(results, result)
+		logger.Debug("met criterion")
 	}
 
-	return &Diagnosis{
-		OverallResult: overallResult,
-		CheckResults:  results,
-	}, nil
+	return Diagnosis{diagnosis, results}, nil
 }
 
-// CollectMetrics returns an array of values collected for each of the specified
-// metrics criteria.
+// CollectMetrics gets a metrics value for each of the given health criteria and
+// returns a result for each criterion.
 func CollectMetrics(ctx context.Context, provider metrics.Provider, offset time.Duration, healthCriteria []config.Metric) ([]float64, error) {
-	logger := util.LoggerFromContext(ctx)
-	logger.Debug("start collecting metrics")
-	var values []float64
+	if len(healthCriteria) == 0 {
+		return nil, errors.New("health criteria must be specified")
+	}
+	var metricsValues []float64
 	for _, criteria := range healthCriteria {
-		var value float64
+		var metricsValue float64
 		var err error
 
 		switch criteria.Type {
 		case config.LatencyMetricsCheck:
-			value, err = latency(ctx, provider, offset, criteria.Percentile)
+			metricsValue, err = latency(ctx, provider, offset, criteria.Percentile)
 			break
 		case config.ErrorRateMetricsCheck:
-			value, err = errorRatePercent(ctx, provider, offset)
+			metricsValue, err = errorRatePercent(ctx, provider, offset)
 			break
 		default:
 			return nil, errors.Errorf("unimplemented metrics %q", criteria.Type)
@@ -102,27 +111,22 @@ func CollectMetrics(ctx context.Context, provider metrics.Provider, offset time.
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to obtain metrics %q", criteria.Type)
 		}
-		values = append(values, value)
+		metricsValues = append(metricsValues, metricsValue)
 	}
 
-	return values, nil
+	return metricsValues, nil
 }
 
-// determineResult concludes if metrics criteria was met.
-//
-// The returned value also includes a string with details of why the criteria
-// was met or not.
-func determineResult(metricsType config.MetricsCheck, threshold float64, actualValue float64) CheckResult {
-	result := CheckResult{ActualValue: actualValue, Threshold: threshold}
-
+// isCriteriaMet concludes if metrics criteria was met.
+func isCriteriaMet(metricsType config.MetricsCheck, threshold float64, actualValue float64) bool {
 	// As of now, the supported health criteria (latency and error rate) need to
 	// be less than the threshold. So, this is sufficient for now but might need
 	// to change to a switch statement when criteria with a minimum threshold is
 	// added.
 	if actualValue <= threshold {
-		result.IsCriteriaMet = true
+		return true
 	}
-	return result
+	return false
 }
 
 // latency returns the latency for the given offset and percentile.

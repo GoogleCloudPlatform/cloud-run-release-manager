@@ -12,31 +12,22 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestDiagnose(t *testing.T) {
-	metricsMock := &metricsMocker.Metrics{}
-	metricsMock.LatencyFn = func(ctx context.Context, offset time.Duration, alignReduceType metrics.AlignReduce) (float64, error) {
-		return 500, nil
-	}
-	metricsMock.ErrorRateFn = func(ctx context.Context, offset time.Duration) (float64, error) {
-		return 0.01, nil
-	}
-
+func TestDiagnosis(t *testing.T) {
 	tests := []struct {
 		name           string
-		offset         time.Duration
-		minRequests    int64
 		healthCriteria []config.Metric
-		expected       *health.Diagnosis
+		results        []float64
+		expected       health.Diagnosis
+		shouldErr      bool
 	}{
 		{
-			name:        "healthy revision",
-			offset:      5 * time.Minute,
-			minRequests: 1000,
+			name: "healthy revision",
 			healthCriteria: []config.Metric{
 				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
 				{Type: config.ErrorRateMetricsCheck, Threshold: 5},
 			},
-			expected: &health.Diagnosis{
+			results: []float64{500.0, 1.0},
+			expected: health.Diagnosis{
 				OverallResult: health.Healthy,
 				CheckResults: []health.CheckResult{
 					{
@@ -53,13 +44,13 @@ func TestDiagnose(t *testing.T) {
 			},
 		},
 		{
-			name:   "barely healthy revision",
-			offset: 5 * time.Minute,
+			name: "barely healthy revision",
 			healthCriteria: []config.Metric{
 				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 500},
 				{Type: config.ErrorRateMetricsCheck, Threshold: 1},
 			},
-			expected: &health.Diagnosis{
+			results: []float64{500.0, 1.0},
+			expected: health.Diagnosis{
 				OverallResult: health.Healthy,
 				CheckResults: []health.CheckResult{
 					{
@@ -76,13 +67,12 @@ func TestDiagnose(t *testing.T) {
 			},
 		},
 		{
-			name:        "unhealthy revision, miss latency",
-			offset:      5 * time.Minute,
-			minRequests: 1000,
+			name: "unhealthy revision, miss latency",
 			healthCriteria: []config.Metric{
 				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 499},
 			},
-			expected: &health.Diagnosis{
+			results: []float64{500.0},
+			expected: health.Diagnosis{
 				OverallResult: health.Unhealthy,
 				CheckResults: []health.CheckResult{
 					{
@@ -94,13 +84,12 @@ func TestDiagnose(t *testing.T) {
 			},
 		},
 		{
-			name:        "unhealthy revision, miss error rate",
-			offset:      5 * time.Minute,
-			minRequests: 1000,
+			name: "unhealthy revision, miss error rate",
 			healthCriteria: []config.Metric{
 				{Type: config.ErrorRateMetricsCheck, Threshold: 0.95},
 			},
-			expected: &health.Diagnosis{
+			results: []float64{1.0},
+			expected: health.Diagnosis{
 				OverallResult: health.Unhealthy,
 				CheckResults: []health.CheckResult{
 					{
@@ -111,13 +100,57 @@ func TestDiagnose(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:      "should err, empty health criteria",
+			shouldErr: true,
+		},
+		{
+			name: "should err, different sizes for criteria and results",
+			healthCriteria: []config.Metric{
+				{Type: config.ErrorRateMetricsCheck, Threshold: 0.95},
+			},
+			results:   []float64{},
+			shouldErr: true,
+		},
+		{
+			name:      "should err, empty health criteria",
+			shouldErr: true,
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			diagnosis, _ := health.Diagnose(ctx, metricsMock, test.offset, test.minRequests, test.healthCriteria)
-			assert.Equal(t, test.expected, diagnosis)
+			diagnosis, err := health.Diagnose(ctx, test.healthCriteria, test.results)
+			if test.shouldErr {
+				assert.NotNil(t, err)
+			} else {
+				assert.Equal(t, test.expected, diagnosis)
+			}
 		})
 	}
+}
+
+// TestCollectMetrics tests that the health.CollectMetrics returns the correct
+// values using the metrics provider.
+func TestCollectMetrics(t *testing.T) {
+	metricsMock := &metricsMocker.Metrics{}
+	metricsMock.LatencyFn = func(ctx context.Context, offset time.Duration, alignReduceType metrics.AlignReduce) (float64, error) {
+		return 500, nil
+	}
+	metricsMock.ErrorRateFn = func(ctx context.Context, offset time.Duration) (float64, error) {
+		return 0.01, nil
+	}
+
+	ctx := context.Background()
+	offset := 5 * time.Minute
+	healthCriteria := []config.Metric{
+		{Type: config.LatencyMetricsCheck, Percentile: 99},
+		{Type: config.ErrorRateMetricsCheck},
+	}
+	expected := []float64{500.0, 1.0}
+	results, _ := health.CollectMetrics(ctx, metricsMock, offset, healthCriteria)
+	assert.Equal(t, expected, results)
+
+	assert.Equal(t, expected, results)
 }
