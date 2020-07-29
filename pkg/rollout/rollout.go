@@ -1,6 +1,7 @@
 package rollout
 
 import (
+	"context"
 	"io/ioutil"
 
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics"
@@ -20,13 +21,14 @@ type ServiceRecord struct {
 
 // Rollout is the rollout manager.
 type Rollout struct {
-	runClient       runapi.Client
+	ctx             context.Context
 	metricsProvider metrics.Provider
 	service         *run.Service
 	serviceName     string
 	project         string
 	region          string
 	strategy        *config.Strategy
+	runClient       runapi.Client
 	log             *logrus.Entry
 
 	// Used to determine if candidate should become stable during update.
@@ -41,20 +43,26 @@ const (
 )
 
 // New returns a new rollout manager.
-func New(client runapi.Client, metricsProvider metrics.Provider, svcRecord *ServiceRecord, strategy *config.Strategy) *Rollout {
+func New(ctx context.Context, metricsProvider metrics.Provider, svcRecord *ServiceRecord, strategy *config.Strategy) *Rollout {
 	logger := logrus.New()
 	logger.SetOutput(ioutil.Discard)
 
 	return &Rollout{
-		runClient:       client,
+		ctx:             ctx,
 		metricsProvider: metricsProvider,
 		service:         svcRecord.Service,
 		serviceName:     svcRecord.Metadata.Name,
 		project:         svcRecord.Project,
 		region:          svcRecord.Region,
 		strategy:        strategy,
-		log:             logger.WithField("project", svcRecord.Project),
+		log:             logrus.NewEntry(logrus.New()),
 	}
+}
+
+// WithClient updates the client in the rollout instance.
+func (r *Rollout) WithClient(client runapi.Client) *Rollout {
+	r.runClient = client
+	return r
 }
 
 // WithLogger updates the logger in the rollout instance.

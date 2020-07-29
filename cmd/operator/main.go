@@ -175,7 +175,7 @@ func handleRollout(ctx context.Context, logger *logrus.Logger, service *rollout.
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize metrics provider")
 	}
-	roll := rollout.New(client, metricsProvider, service, strategy).WithLogger(lg.Logger)
+	roll := rollout.New(ctx, metricsProvider, service, strategy).WithClient(client).WithLogger(lg.Logger)
 
 	changed, err := roll.Rollout()
 	if err != nil {
