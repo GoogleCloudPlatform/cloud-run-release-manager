@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics"
+	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics/sheets"
 	runapi "github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/run"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/stackdriver"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/config"
@@ -75,6 +77,9 @@ var (
 	flLatencyP99  float64
 	flLatencyP95  float64
 	flLatencyP50  float64
+
+	// Metrics provider flags.
+	flGoogleSheetsID string
 )
 
 func init() {
@@ -91,6 +96,7 @@ func init() {
 	flag.Float64Var(&flLatencyP99, "latency-p99", 0, "expected max latency for 99th percentile of requests (set 0 to ignore)")
 	flag.Float64Var(&flLatencyP95, "latency-p95", 0, "expected max latency for 95th percentile of requests (set 0 to ignore)")
 	flag.Float64Var(&flLatencyP50, "latency-p50", 0, "expected max latency for 50th percentile of requests (set 0 to ignore)")
+	flag.StringVar(&flGoogleSheetsID, "google-sheets", "", "ID of public Google sheets document to use as metrics provider")
 	flag.Parse()
 
 	if flRegionsString != "" {
@@ -171,7 +177,7 @@ func handleRollout(ctx context.Context, logger *logrus.Logger, service *rollout.
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize Cloud Run API client")
 	}
-	metricsProvider, err := stackdriver.NewProvider(ctx, service.Project, service.Region, service.Metadata.Name)
+	metricsProvider, err := chooseMetricsProvider(ctx, lg, service.Project, service.Region, service.Metadata.Name)
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize metrics provider")
 	}
@@ -219,6 +225,17 @@ func flagsAreValid() (bool, error) {
 	}
 
 	return true, nil
+}
+
+// chooseMetricsProvider checks the CLI flags and determine which metrics
+// provider should be used for the rollout.
+func chooseMetricsProvider(ctx context.Context, logger *logrus.Entry, project, region, svcName string) (metrics.Provider, error) {
+	if flGoogleSheetsID != "" {
+		logger.Debug("using Google Sheets as metrics provider")
+		return sheets.NewProvider(ctx, flGoogleSheetsID, "", region, svcName)
+	}
+	logger.Debug("using Cloud Monitoring (Stackdriver) as metrics provider")
+	return stackdriver.NewProvider(ctx, project, region, svcName)
 }
 
 // healthCriteriaFromFlags checks the metrics-related flags and return an array
