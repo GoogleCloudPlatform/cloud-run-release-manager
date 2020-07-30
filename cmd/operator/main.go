@@ -132,8 +132,8 @@ func main() {
 	healthCriteria := healthCriteriaFromFlags(flErrorRate, flLatencyP99, flLatencyP95, flLatencyP50)
 	printHealthCriteria(logger, healthCriteria)
 	cfg := config.WithValues([]*config.Target{target}, flSteps, flInterval, healthCriteria)
-	if !cfg.IsValid(flCLI) {
-		logger.Fatalf("invalid rollout configuration")
+	if err := cfg.Validate(flCLI); err != nil {
+		logger.Fatalf("invalid rollout configuration: %v", err)
 	}
 
 	ctx := context.Background()
