@@ -17,9 +17,11 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics"
@@ -155,11 +157,33 @@ func runDaemon(ctx context.Context, logger *logrus.Logger, cfg *config.Config) e
 			logger.Warn("no service matches the targets")
 		}
 
-		// TODO: Handle all the filtered services
-		err = handleRollout(ctx, logger, services[0], cfg.Strategy)
-		if err != nil {
-			return errors.Wrap(err, "error when handling rollout")
+		var (
+			errs []error
+			mu   sync.Mutex
+			wg   sync.WaitGroup
+		)
+		for _, service := range services {
+			wg.Add(1)
+			go func(ctx context.Context, lg *logrus.Logger, svc *rollout.ServiceRecord, strategy *config.Strategy) {
+				err = handleRollout(ctx, lg, svc, strategy)
+				if err != nil {
+					mu.Lock()
+					errs = append(errs, err)
+					mu.Unlock()
+				}
+				wg.Done()
+			}(ctx, logger, service, cfg.Strategy)
 		}
+		wg.Wait()
+
+		var errsStr string
+		for i, err := range errs {
+			errsStr += fmt.Sprintf("\n[error#%d] %v", i, err)
+		}
+		if len(errs) != 0 {
+			logger.Warnf("there were %d errors: %s", len(errs), errsStr)
+		}
+
 		duration := time.Duration(cfg.Strategy.Interval)
 		time.Sleep(duration * time.Second)
 	}
@@ -185,6 +209,7 @@ func handleRollout(ctx context.Context, logger *logrus.Logger, service *rollout.
 
 	changed, err := roll.Rollout()
 	if err != nil {
+		logger.Errorf("rollout failed, error=%v", err)
 		return errors.Wrap(err, "rollout failed")
 	}
 
