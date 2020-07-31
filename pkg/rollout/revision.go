@@ -6,8 +6,9 @@ import (
 
 // Annotations name for information related to the rollout.
 const (
-	StableRevisionAnnotation    = "rollout.cloud.run/stableRevision"
-	CandidateRevisionAnnotation = "rollout.cloud.run/candidateRevision"
+	StableRevisionAnnotation              = "rollout.cloud.run/stableRevision"
+	CandidateRevisionAnnotation           = "rollout.cloud.run/candidateRevision"
+	LastFailedCandidateRevisionAnnotation = "rollout.cloud.run/lastFailedCandidateRevision"
 )
 
 // DetectStableRevisionName returns the stable revision of the Cloud Run service.
@@ -46,6 +47,11 @@ func DetectCandidateRevisionName(svc *run.Service, stable string) string {
 		return ""
 	}
 
+	// If the latestRevision has previously been treated as a candidate and
+	// failed to meet health checks, no candidate exists.
+	if latestRevision == svc.Metadata.Annotations[LastFailedCandidateRevisionAnnotation] {
+		return ""
+	}
 	return latestRevision
 }
 
@@ -71,4 +77,22 @@ func findRevisionWithTag(svc *run.Service, tag string) string {
 	}
 
 	return ""
+}
+
+// isNewCandidate determines if the candidate was just deployed.
+//
+// Knowing that a candidate is new is helpful since metrics cannot be obtained
+// about it (it has 0 traffic), so the rollout process should add some initial
+// traffic to the new revision.
+func isNewCandidate(svc *run.Service, currentCandidate string) bool {
+	for _, target := range svc.Spec.Traffic {
+		if target.RevisionName == currentCandidate {
+			return target.Percent == 0
+		}
+	}
+
+	// Cloud Run (often) removes traffic targets for revisions that have no
+	// traffic. If the candidate was not found in the traffic configuration, it
+	// means the revision is a new candidate.
+	return true
 }
