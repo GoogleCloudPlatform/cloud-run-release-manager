@@ -30,16 +30,8 @@ func TestDiagnosis(t *testing.T) {
 			expected: health.Diagnosis{
 				OverallResult: health.Healthy,
 				CheckResults: []health.CheckResult{
-					{
-						Threshold:     750.0,
-						ActualValue:   500.0,
-						IsCriteriaMet: true,
-					},
-					{
-						Threshold:     5.0,
-						ActualValue:   1.0,
-						IsCriteriaMet: true,
-					},
+					{Threshold: 750.0, ActualValue: 500.0, IsCriteriaMet: true},
+					{Threshold: 5.0, ActualValue: 1.0, IsCriteriaMet: true},
 				},
 			},
 		},
@@ -53,16 +45,8 @@ func TestDiagnosis(t *testing.T) {
 			expected: health.Diagnosis{
 				OverallResult: health.Healthy,
 				CheckResults: []health.CheckResult{
-					{
-						Threshold:     500.0,
-						ActualValue:   500.0,
-						IsCriteriaMet: true,
-					},
-					{
-						Threshold:     1.0,
-						ActualValue:   1.0,
-						IsCriteriaMet: true,
-					},
+					{Threshold: 500.0, ActualValue: 500.0, IsCriteriaMet: true},
+					{Threshold: 1.0, ActualValue: 1.0, IsCriteriaMet: true},
 				},
 			},
 		},
@@ -75,11 +59,7 @@ func TestDiagnosis(t *testing.T) {
 			expected: health.Diagnosis{
 				OverallResult: health.Unhealthy,
 				CheckResults: []health.CheckResult{
-					{
-						Threshold:     499.0,
-						ActualValue:   500.0,
-						IsCriteriaMet: false,
-					},
+					{Threshold: 499.0, ActualValue: 500.0},
 				},
 			},
 		},
@@ -92,17 +72,39 @@ func TestDiagnosis(t *testing.T) {
 			expected: health.Diagnosis{
 				OverallResult: health.Unhealthy,
 				CheckResults: []health.CheckResult{
-					{
-						Threshold:     0.95,
-						ActualValue:   1.0,
-						IsCriteriaMet: false,
-					},
+					{Threshold: 0.95, ActualValue: 1.0},
 				},
 			},
 		},
 		{
-			name:      "should err, empty health criteria",
-			shouldErr: true,
+			name: "zero threshold",
+			healthCriteria: []config.Metric{
+				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 0},
+				{Type: config.ErrorRateMetricsCheck, Threshold: 0},
+			},
+			results: []float64{500.0, 1.0},
+			expected: health.Diagnosis{
+				OverallResult: health.Unhealthy,
+				CheckResults: []health.CheckResult{
+					{Threshold: 0, ActualValue: 500.0, IsCriteriaMet: false},
+					{Threshold: 0, ActualValue: 1.0, IsCriteriaMet: false},
+				},
+			},
+		},
+		{
+			name: "zero metrics values",
+			healthCriteria: []config.Metric{
+				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
+				{Type: config.ErrorRateMetricsCheck, Threshold: 5},
+			},
+			results: []float64{0, 0},
+			expected: health.Diagnosis{
+				OverallResult: health.Healthy,
+				CheckResults: []health.CheckResult{
+					{Threshold: 750, ActualValue: 0, IsCriteriaMet: true},
+					{Threshold: 5, ActualValue: 0, IsCriteriaMet: true},
+				},
+			},
 		},
 		{
 			name: "should err, different sizes for criteria and results",
