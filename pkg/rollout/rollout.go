@@ -119,7 +119,7 @@ func (r *Rollout) UpdateService(svc *run.Service) (*run.Service, error) {
 		return svc, errors.Wrap(err, "failed to replace service")
 	}
 
-	diagnosis, err := r.diagnoseCandidate(candidate, r.strategy.Metrics)
+	diagnosis, err := r.diagnoseCandidate(candidate, r.strategy.HealthCriteria)
 	if err != nil {
 		r.log.Error("could not diagnose candidate's health")
 		return nil, errors.Wrapf(err, "failed to diagnose health for candidate %q", candidate)

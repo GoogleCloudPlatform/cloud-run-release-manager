@@ -38,8 +38,8 @@ type Metric struct {
 
 // Strategy is the steps and configuration for rollout.
 type Strategy struct {
-	Steps   []int64
-	Metrics []Metric
+	Steps          []int64
+	HealthCriteria []Metric
 
 	// TODO: Give this property a clearer name.
 	Interval int64
@@ -59,9 +59,9 @@ func WithValues(targets []*Target, steps []int64, interval int64, metrics []Metr
 	return &Config{
 		Targets: targets,
 		Strategy: &Strategy{
-			Steps:    steps,
-			Metrics:  metrics,
-			Interval: interval,
+			Steps:          steps,
+			HealthCriteria: metrics,
+			Interval:       interval,
 		},
 	}
 }
@@ -94,7 +94,7 @@ func (config *Config) Validate(cliMode bool) error {
 		previous = step
 	}
 
-	for i, criteria := range config.Strategy.Metrics {
+	for i, criteria := range config.Strategy.HealthCriteria {
 		if err := validateMetrics(criteria); err != nil {
 			return errors.Wrapf(err, "invalid metrics criteria at index %d", i)
 		}

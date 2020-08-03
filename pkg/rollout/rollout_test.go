@@ -242,7 +242,7 @@ func TestUpdateService(t *testing.T) {
 		svc := generateService(opts)
 		svcRecord := &rollout.ServiceRecord{Service: svc}
 
-		strategy.Metrics = test.healthCriteria
+		strategy.HealthCriteria = test.healthCriteria
 		lg := logrus.New()
 		lg.SetLevel(logrus.DebugLevel)
 		r := rollout.New(context.TODO(), metricsMock, svcRecord, strategy).WithClient(runclient).WithLogger(lg)
