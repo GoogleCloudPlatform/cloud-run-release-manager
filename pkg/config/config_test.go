@@ -66,6 +66,17 @@ func TestIsValid(t *testing.T) {
 			shouldErr: true,
 		},
 		{
+			name: "invalid request count value",
+			config: config.WithValues([]*config.Target{
+				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
+			}, []int64{5, 30, 60}, 20,
+				[]config.Metric{
+					{Type: config.RequestCountMetricsCheck, Threshold: -1},
+				},
+			),
+			shouldErr: true,
+		},
+		{
 			name: "invalid error rate in metrics",
 			config: config.WithValues([]*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),

@@ -9,8 +9,9 @@ type MetricsCheck string
 
 // Supported metrics checks.
 const (
-	LatencyMetricsCheck   MetricsCheck = "request-latency"
-	ErrorRateMetricsCheck MetricsCheck = "error-rate-percent"
+	RequestCountMetricsCheck MetricsCheck = "request-count"
+	LatencyMetricsCheck      MetricsCheck = "request-latency"
+	ErrorRateMetricsCheck    MetricsCheck = "error-rate-percent"
 )
 
 // Target is the configuration to filter services.
@@ -104,9 +105,13 @@ func (config *Config) Validate(cliMode bool) error {
 
 func validateMetrics(metricsCriteria Metric) error {
 	threshold := metricsCriteria.Threshold
+	if threshold < 0 {
+		return errors.Errorf("threshold cannot be negative, criteria %q", metricsCriteria.Type)
+	}
+
 	switch metricsCriteria.Type {
 	case ErrorRateMetricsCheck:
-		if threshold > 100 || threshold < 0 {
+		if threshold > 100 {
 			return errors.Errorf("threshold must be greater than 0 and less than 100 for %q", metricsCriteria.Type)
 		}
 	case LatencyMetricsCheck:
@@ -114,9 +119,8 @@ func validateMetrics(metricsCriteria Metric) error {
 		if percentile != 99 && percentile != 95 && percentile != 50 {
 			return errors.Errorf("invalid percentile for %q", metricsCriteria.Type)
 		}
-		if metricsCriteria.Threshold < 0 {
-			return errors.Errorf("threshold cannot be negative for %q", metricsCriteria.Type)
-		}
+	case RequestCountMetricsCheck:
+		return nil
 	default:
 		return errors.Errorf("invalid metric criteria %q", metricsCriteria.Type)
 	}
