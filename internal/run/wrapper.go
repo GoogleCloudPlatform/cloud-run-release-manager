@@ -68,7 +68,7 @@ func (a *API) ServicesWithLabelSelector(namespace string, labelSelector string) 
 
 // Regions gets the supported regions for the project.
 func Regions(ctx context.Context, project string) ([]string, error) {
-	logger := util.LoggerFromContext(ctx)
+	logger := util.LoggerFrom(ctx)
 	if len(regions) != 0 {
 		logger.Debug("using cached regions, skip querying from API")
 		return regions, nil

@@ -17,8 +17,8 @@ func ContextWithLogger(ctx context.Context, logger *logrus.Entry) context.Contex
 	return context.WithValue(ctx, loggerKey, logger)
 }
 
-// LoggerFromContext returns the logger from the context.
-func LoggerFromContext(ctx context.Context) *logrus.Entry {
+// LoggerFrom returns the logger from the context.
+func LoggerFrom(ctx context.Context) *logrus.Entry {
 	value := ctx.Value(loggerKey)
 	logger, ok := value.(*logrus.Entry)
 	if !ok {

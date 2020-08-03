@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestLoggerFromContext(t *testing.T) {
+func TestLoggerFrom(t *testing.T) {
 	tests := []struct {
 		name   string
 		logger *logrus.Logger
@@ -36,7 +36,7 @@ func TestLoggerFromContext(t *testing.T) {
 			ctx = util.ContextWithLogger(ctx, lg)
 		}
 
-		returnedLg := util.LoggerFromContext(ctx).Logger
+		returnedLg := util.LoggerFrom(ctx).Logger
 		assert.Equal(t, test.level, returnedLg.Level)
 	}
 }

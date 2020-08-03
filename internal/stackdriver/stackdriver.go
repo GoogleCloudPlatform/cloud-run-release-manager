@@ -71,7 +71,7 @@ func (p *Provider) RequestCount(ctx context.Context, offset time.Duration) (int6
 		AggregationGroupByFields("resource.labels.service_name").
 		AggregationCrossSeriesReducer("REDUCE_SUM")
 
-	logger := util.LoggerFromContext(ctx).WithFields(logrus.Fields{
+	logger := util.LoggerFrom(ctx).WithFields(logrus.Fields{
 		"intervalStartTime": startTimeString,
 		"intervalEndTime":   endTimeString,
 		"metrics":           "request-count",
@@ -114,7 +114,7 @@ func (p *Provider) Latency(ctx context.Context, offset time.Duration, alignReduc
 		AggregationGroupByFields("resource.labels.service_name").
 		AggregationCrossSeriesReducer(reducer)
 
-	logger := util.LoggerFromContext(ctx).WithFields(logrus.Fields{
+	logger := util.LoggerFrom(ctx).WithFields(logrus.Fields{
 		"intervalStartTime": startTimeString,
 		"intervalEndTime":   endTimeString,
 		"metrics":           "latency",
@@ -158,7 +158,7 @@ func (p *Provider) ErrorRate(ctx context.Context, offset time.Duration) (float64
 		AggregationGroupByFields("metric.labels.response_code_class").
 		AggregationCrossSeriesReducer("REDUCE_SUM")
 
-	logger := util.LoggerFromContext(ctx).WithFields(logrus.Fields{
+	logger := util.LoggerFrom(ctx).WithFields(logrus.Fields{
 		"intervalStartTime": startTimeString,
 		"intervalEndTime":   endTimeString,
 		"metrics":           "error-rate",

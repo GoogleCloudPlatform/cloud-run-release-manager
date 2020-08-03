@@ -47,7 +47,7 @@ type CheckResult struct {
 // Otherwise, all metrics criteria are checked to determine whether the revision
 // is healthy or not.
 func Diagnose(ctx context.Context, healthCriteria []config.Metric, actualValues []float64) (Diagnosis, error) {
-	logger := util.LoggerFromContext(ctx)
+	logger := util.LoggerFrom(ctx)
 	if len(healthCriteria) != len(actualValues) {
 		return Diagnosis{Unknown, nil}, errors.New("the size of health criteria is not the same to the size of the actual metrics values")
 	}
@@ -136,7 +136,7 @@ func latency(ctx context.Context, provider metrics.Provider, offset time.Duratio
 		return 0, errors.Wrap(err, "failed to parse percentile")
 	}
 
-	logger := util.LoggerFromContext(ctx).WithField("percentile", percentile)
+	logger := util.LoggerFrom(ctx).WithField("percentile", percentile)
 	logger.Debug("querying for latency metrics")
 	latency, err := provider.Latency(ctx, offset, alignerReducer)
 	if err != nil {
@@ -149,7 +149,7 @@ func latency(ctx context.Context, provider metrics.Provider, offset time.Duratio
 
 // errorRatePercent returns the percentage of errors during the given offset.
 func errorRatePercent(ctx context.Context, provider metrics.Provider, offset time.Duration) (float64, error) {
-	logger := util.LoggerFromContext(ctx)
+	logger := util.LoggerFrom(ctx)
 	logger.Debug("querying for error rate metrics")
 	rate, err := provider.ErrorRate(ctx, offset)
 	if err != nil {

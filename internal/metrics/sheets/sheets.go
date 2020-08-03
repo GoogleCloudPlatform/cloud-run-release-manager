@@ -70,7 +70,7 @@ func (p *Provider) SetCandidateRevision(revisionName string) {}
 
 // RequestCount returns the number of requests for the given offset.
 func (p *Provider) RequestCount(ctx context.Context, offset time.Duration) (int64, error) {
-	logger := util.LoggerFromContext(ctx)
+	logger := util.LoggerFrom(ctx)
 	logger.Debug("querying google sheet for request count")
 	serviceRow, err := p.retrieveServiceRow(logger)
 	if err != nil {
@@ -91,7 +91,7 @@ func (p *Provider) RequestCount(ctx context.Context, offset time.Duration) (int6
 
 // Latency returns the latency for the resource for the given offset.
 func (p *Provider) Latency(ctx context.Context, offset time.Duration, alignReduceType metrics.AlignReduce) (float64, error) {
-	logger := util.LoggerFromContext(ctx)
+	logger := util.LoggerFrom(ctx)
 	logger.Debug("querying google sheet for request count")
 	serviceRow, err := p.retrieveServiceRow(logger)
 	if err != nil {
@@ -124,7 +124,7 @@ func (p *Provider) Latency(ctx context.Context, offset time.Duration, alignReduc
 
 // ErrorRate returns the rate of 5xx errors for the resource matching the filter.
 func (p *Provider) ErrorRate(ctx context.Context, offset time.Duration) (float64, error) {
-	logger := util.LoggerFromContext(ctx)
+	logger := util.LoggerFrom(ctx)
 	logger.Debug("querying google sheet for request count")
 	serviceRow, err := p.retrieveServiceRow(logger)
 	if err != nil {
