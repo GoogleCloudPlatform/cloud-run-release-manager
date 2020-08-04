@@ -51,6 +51,31 @@ func TestDiagnosis(t *testing.T) {
 			},
 		},
 		{
+			name: "no enough requests, inconclusive",
+			healthCriteria: []config.Metric{
+				{Type: config.RequestCountMetricsCheck, Threshold: 1000},
+				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 500},
+			},
+			results: []float64{800, 750.0},
+			expected: health.Diagnosis{
+				OverallResult: health.Inconclusive,
+				CheckResults:  nil,
+			},
+		},
+		{
+			name: "only request count criteria, unknown",
+			healthCriteria: []config.Metric{
+				{Type: config.RequestCountMetricsCheck, Threshold: 1000},
+			},
+			results: []float64{1500},
+			expected: health.Diagnosis{
+				OverallResult: health.Unknown,
+				CheckResults: []health.CheckResult{
+					{Threshold: 1000, ActualValue: 1500, IsCriteriaMet: true},
+				},
+			},
+		},
+		{
 			name: "unhealthy revision, miss latency",
 			healthCriteria: []config.Metric{
 				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 499},
@@ -121,22 +146,25 @@ func TestDiagnosis(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(test.name, func(tt *testing.T) {
 			ctx := context.Background()
 			diagnosis, err := health.Diagnose(ctx, test.healthCriteria, test.results)
 			if test.shouldErr {
-				assert.NotNil(t, err)
+				assert.NotNil(tt, err)
 			} else {
-				assert.Equal(t, test.expected, diagnosis)
+				assert.Equal(tt, test.expected, diagnosis)
 			}
 		})
 	}
 }
 
-// TestCollectMetrics tests that the health.CollectMetrics returns the correct
-// values using the metrics provider.
+// TestCollectMetrics tests that health.CollectMetrics returns values using the
+// metrics provider.
 func TestCollectMetrics(t *testing.T) {
 	metricsMock := &metricsMocker.Metrics{}
+	metricsMock.RequestCountFn = func(ctx context.Context, offset time.Duration) (int64, error) {
+		return 1000, nil
+	}
 	metricsMock.LatencyFn = func(ctx context.Context, offset time.Duration, alignReduceType metrics.AlignReduce) (float64, error) {
 		return 500, nil
 	}
@@ -147,12 +175,13 @@ func TestCollectMetrics(t *testing.T) {
 	ctx := context.Background()
 	offset := 5 * time.Minute
 	healthCriteria := []config.Metric{
+		{Type: config.RequestCountMetricsCheck},
 		{Type: config.LatencyMetricsCheck, Percentile: 99},
 		{Type: config.ErrorRateMetricsCheck},
 	}
-	expected := []float64{500.0, 1.0}
-	results, _ := health.CollectMetrics(ctx, metricsMock, offset, healthCriteria)
-	assert.Equal(t, expected, results)
+	expected := []float64{1000, 500.0, 1.0}
 
+	results, err := health.CollectMetrics(ctx, metricsMock, offset, healthCriteria)
+	assert.Nil(t, err)
 	assert.Equal(t, expected, results)
 }

@@ -65,9 +65,17 @@ func Diagnose(ctx context.Context, healthCriteria []config.Metric, actualValues 
 			"threshold":   criteria.Threshold,
 			"actualValue": value,
 		})
+		isMet := isCriteriaMet(criteria.Type, criteria.Threshold, value)
+
+		// For unmet request count, return inconclusive and empty results.
+		if !isMet && criteria.Type == config.RequestCountMetricsCheck {
+			diagnosis = Inconclusive
+			results = nil
+			break
+		}
 
 		result := CheckResult{Threshold: criteria.Threshold, ActualValue: value}
-		if !isCriteriaMet(criteria.Type, criteria.Threshold, value) {
+		if !isMet {
 			logger.Debug("unmet criterion")
 			diagnosis = Unhealthy
 			results = append(results, result)
@@ -75,7 +83,7 @@ func Diagnose(ctx context.Context, healthCriteria []config.Metric, actualValues 
 		}
 
 		// Only switch to healthy once a first criteria is met.
-		if diagnosis == Unknown {
+		if diagnosis == Unknown && criteria.Type != config.RequestCountMetricsCheck {
 			diagnosis = Healthy
 		}
 		result.IsCriteriaMet = true
@@ -98,12 +106,12 @@ func CollectMetrics(ctx context.Context, provider metrics.Provider, offset time.
 		var err error
 
 		switch criteria.Type {
+		case config.RequestCountMetricsCheck:
+			metricsValue, err = requestCount(ctx, provider, offset)
 		case config.LatencyMetricsCheck:
 			metricsValue, err = latency(ctx, provider, offset, criteria.Percentile)
-			break
 		case config.ErrorRateMetricsCheck:
 			metricsValue, err = errorRatePercent(ctx, provider, offset)
-			break
 		default:
 			return nil, errors.Errorf("unimplemented metrics %q", criteria.Type)
 		}
@@ -119,14 +127,20 @@ func CollectMetrics(ctx context.Context, provider metrics.Provider, offset time.
 
 // isCriteriaMet concludes if metrics criteria was met.
 func isCriteriaMet(metricsType config.MetricsCheck, threshold float64, actualValue float64) bool {
-	// As of now, the supported health criteria (latency and error rate) need to
-	// be less than the threshold. So, this is sufficient for now but might need
-	// to change to a switch statement when criteria with a minimum threshold is
-	// added.
-	if actualValue <= threshold {
-		return true
+	// Of all the supported metrics, only the threshold for request count has an
+	// expected minimum value.
+	if metricsType == config.RequestCountMetricsCheck {
+		return actualValue >= threshold
 	}
-	return false
+	return actualValue <= threshold
+}
+
+// requestCount returns the number of requests during the given offset.
+func requestCount(ctx context.Context, provider metrics.Provider, offset time.Duration) (float64, error) {
+	logger := util.LoggerFrom(ctx)
+	logger.Debug("querying for request count metrics")
+	count, err := provider.RequestCount(ctx, offset)
+	return float64(count), errors.Wrap(err, "failed to get request count metrics")
 }
 
 // latency returns the latency for the given offset and percentile.
