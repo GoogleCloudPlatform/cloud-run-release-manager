@@ -42,6 +42,9 @@ func generateService(opts *ServiceOpts) *run.Service {
 func TestUpdateService(t *testing.T) {
 	runclient := &runMocker.RunAPI{}
 	metricsMock := &metricsMocker.Metrics{}
+	metricsMock.RequestCountFn = func(ctx context.Context, offset time.Duration) (int64, error) {
+		return 1000, nil
+	}
 	metricsMock.LatencyFn = func(ctx context.Context, offset time.Duration, alignReduceType metrics.AlignReduce) (float64, error) {
 		return 500, nil
 	}
@@ -226,6 +229,33 @@ func TestUpdateService(t *testing.T) {
 			},
 			lastReady:  "test-002",
 			nilService: true,
+		},
+		// Inconclusive diagnosis, do nothing.
+		{
+			name: "inconclusive diagnosis",
+			traffic: []*run.TrafficTarget{
+				{RevisionName: "test-002", Percent: 20, Tag: rollout.CandidateTag},
+				{RevisionName: "test-001", Percent: 80, Tag: rollout.StableTag},
+			},
+			lastReady: "test-002",
+			healthCriteria: []config.Metric{
+				{Type: config.RequestCountMetricsCheck, Threshold: 1500},
+				{Type: config.ErrorRateMetricsCheck, Threshold: 0.95},
+			},
+			nilService: true,
+		},
+		// Unknown diagnosis, should err.
+		{
+			name: "unknown diagnosis",
+			traffic: []*run.TrafficTarget{
+				{RevisionName: "test-002", Percent: 20, Tag: rollout.CandidateTag},
+				{RevisionName: "test-001", Percent: 80, Tag: rollout.StableTag},
+			},
+			lastReady: "test-002",
+			healthCriteria: []config.Metric{
+				{Type: config.RequestCountMetricsCheck, Threshold: 500},
+			},
+			shouldErr: true,
 		},
 	}
 
