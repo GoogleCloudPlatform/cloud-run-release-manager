@@ -304,8 +304,7 @@ func (r *Rollout) updateAnnotations(svc *run.Service, stable, candidate string) 
 
 // diagnoseCandidate returns the candidate's diagnosis based on metrics.
 func (r *Rollout) diagnoseCandidate(candidate string, healthCriteria []config.Metric) (d health.Diagnosis, err error) {
-	// TODO(gvso): Consider using a different config value for the offset.
-	healthCheckOffset := time.Duration(r.strategy.Interval) * time.Second
+	healthCheckOffset := time.Duration(r.strategy.HealthOffsetMinute) * time.Minute
 	r.log.Debug("collecting metrics from API")
 	ctx := util.ContextWithLogger(r.ctx, r.log)
 	r.metricsProvider.SetCandidateRevision(candidate)
