@@ -18,20 +18,20 @@ func TestIsValid(t *testing.T) {
 			name: "correct config with label selector",
 			config: config.WithValues([]*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 60}, 20, nil),
+			}, []int64{5, 30, 60}, 20, 30, nil),
 		},
 		{
 			name: "missing project",
 			config: config.WithValues([]*config.Target{
 				config.NewTarget("", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 60}, 20, nil),
+			}, []int64{5, 30, 60}, 20, 30, nil),
 			shouldErr: true,
 		},
 		{
 			name: "missing steps",
 			config: config.WithValues([]*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{}, 20, nil),
+			}, []int64{}, 20, 30, nil),
 			cliMode:   true,
 			shouldErr: true,
 		},
@@ -39,7 +39,7 @@ func TestIsValid(t *testing.T) {
 			name: "steps not in order",
 			config: config.WithValues([]*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{30, 30, 60}, 20, nil),
+			}, []int64{30, 30, 60}, 20, 30, nil),
 			cliMode:   true,
 			shouldErr: true,
 		},
@@ -47,14 +47,14 @@ func TestIsValid(t *testing.T) {
 			name: "step greater than 100",
 			config: config.WithValues([]*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 101}, 20, nil),
+			}, []int64{5, 30, 101}, 20, 30, nil),
 			shouldErr: true,
 		},
 		{
 			name: "no interval for cli mode",
 			config: config.WithValues([]*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 60}, 0, nil),
+			}, []int64{5, 30, 60}, 0, 30, nil),
 			cliMode:   true,
 			shouldErr: true,
 		},
@@ -62,14 +62,14 @@ func TestIsValid(t *testing.T) {
 			name: "empty label selector",
 			config: config.WithValues([]*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, ""),
-			}, []int64{5, 30, 60}, 20, nil),
+			}, []int64{5, 30, 60}, 20, 30, nil),
 			shouldErr: true,
 		},
 		{
 			name: "invalid request count value",
 			config: config.WithValues([]*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 60}, 20,
+			}, []int64{5, 30, 60}, 20, 30,
 				[]config.Metric{
 					{Type: config.RequestCountMetricsCheck, Threshold: -1},
 				},
@@ -80,7 +80,7 @@ func TestIsValid(t *testing.T) {
 			name: "invalid error rate in metrics",
 			config: config.WithValues([]*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 60}, 20,
+			}, []int64{5, 30, 60}, 20, 30,
 				[]config.Metric{
 					{Type: config.ErrorRateMetricsCheck, Threshold: 101},
 				},
@@ -91,7 +91,7 @@ func TestIsValid(t *testing.T) {
 			name: "invalid latency percentile",
 			config: config.WithValues([]*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 60}, 20,
+			}, []int64{5, 30, 60}, 20, 30,
 				[]config.Metric{
 					{Type: config.LatencyMetricsCheck, Percentile: 98},
 				},
@@ -102,7 +102,7 @@ func TestIsValid(t *testing.T) {
 			name: "invalid latency value",
 			config: config.WithValues([]*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 60}, 20,
+			}, []int64{5, 30, 60}, 20, 30,
 				[]config.Metric{
 					{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: -1},
 				},
