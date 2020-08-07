@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/config"
 	"github.com/stretchr/testify/assert"
@@ -9,115 +10,156 @@ import (
 
 func TestIsValid(t *testing.T) {
 	tests := []struct {
-		name      string
-		config    *config.Config
-		cliMode   bool
-		shouldErr bool
+		name                string
+		targets             []*config.Target
+		steps               []int64
+		healthOffset        int
+		timeBetweenRollouts time.Duration
+		metrics             []config.Metric
+		shouldErr           bool
 	}{
 		{
 			name: "correct config with label selector",
-			config: config.WithValues([]*config.Target{
+			targets: []*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 60}, 20, 30, nil),
+			},
+			steps:               []int64{5, 30, 60},
+			healthOffset:        20,
+			timeBetweenRollouts: 10 * time.Minute,
+			metrics: []config.Metric{
+				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
+				{Type: config.RequestCountMetricsCheck, Threshold: 1000},
+			},
+			shouldErr: false,
 		},
 		{
 			name: "missing project",
-			config: config.WithValues([]*config.Target{
+			targets: []*config.Target{
 				config.NewTarget("", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 60}, 20, 30, nil),
-			shouldErr: true,
+			},
+			steps:               []int64{5, 30, 60},
+			healthOffset:        20,
+			timeBetweenRollouts: 10 * time.Minute,
+			metrics:             nil,
+			shouldErr:           true,
 		},
 		{
 			name: "missing steps",
-			config: config.WithValues([]*config.Target{
+			targets: []*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{}, 20, 30, nil),
-			cliMode:   true,
-			shouldErr: true,
+			},
+			steps:               []int64{},
+			healthOffset:        20,
+			timeBetweenRollouts: 10 * time.Minute,
+			metrics:             nil,
+			shouldErr:           true,
 		},
 		{
 			name: "steps not in order",
-			config: config.WithValues([]*config.Target{
+			targets: []*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{30, 30, 60}, 20, 30, nil),
-			cliMode:   true,
-			shouldErr: true,
+			},
+			steps:               []int64{30, 30, 60},
+			healthOffset:        20,
+			timeBetweenRollouts: 10 * time.Minute,
+			metrics:             nil,
+			shouldErr:           true,
 		},
 		{
 			name: "step greater than 100",
-			config: config.WithValues([]*config.Target{
+			targets: []*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 101}, 20, 30, nil),
-			shouldErr: true,
+			},
+			steps:               []int64{5, 30, 101},
+			healthOffset:        20,
+			timeBetweenRollouts: 10 * time.Minute,
+			metrics:             nil,
+			shouldErr:           true,
 		},
 		{
-			name: "no interval for cli mode",
-			config: config.WithValues([]*config.Target{
+			name: "non-positive health offset",
+			targets: []*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 60}, 0, 30, nil),
-			cliMode:   true,
-			shouldErr: true,
+			},
+			steps:               []int64{5, 30, 60},
+			healthOffset:        0,
+			timeBetweenRollouts: 10 * time.Minute,
+			metrics:             nil,
+			shouldErr:           true,
 		},
 		{
 			name: "empty label selector",
-			config: config.WithValues([]*config.Target{
+			targets: []*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, ""),
-			}, []int64{5, 30, 60}, 20, 30, nil),
-			shouldErr: true,
+			},
+			steps:               []int64{5, 30, 60},
+			healthOffset:        20,
+			timeBetweenRollouts: 10 * time.Minute,
+			metrics:             nil,
+			shouldErr:           true,
 		},
 		{
 			name: "invalid request count value",
-			config: config.WithValues([]*config.Target{
+			targets: []*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 60}, 20, 30,
-				[]config.Metric{
-					{Type: config.RequestCountMetricsCheck, Threshold: -1},
-				},
-			),
+			},
+			steps:               []int64{5, 30, 60},
+			healthOffset:        20,
+			timeBetweenRollouts: 10 * time.Minute,
+			metrics: []config.Metric{
+				{Type: config.RequestCountMetricsCheck, Threshold: -1},
+			},
 			shouldErr: true,
 		},
 		{
 			name: "invalid error rate in metrics",
-			config: config.WithValues([]*config.Target{
+			targets: []*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 60}, 20, 30,
-				[]config.Metric{
-					{Type: config.ErrorRateMetricsCheck, Threshold: 101},
-				},
-			),
+			},
+			steps:               []int64{5, 30, 60},
+			healthOffset:        20,
+			timeBetweenRollouts: 10 * time.Minute,
+			metrics: []config.Metric{
+				{Type: config.ErrorRateMetricsCheck, Threshold: 101},
+			},
 			shouldErr: true,
 		},
 		{
 			name: "invalid latency percentile",
-			config: config.WithValues([]*config.Target{
+			targets: []*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 60}, 20, 30,
-				[]config.Metric{
-					{Type: config.LatencyMetricsCheck, Percentile: 98},
-				},
-			),
+			},
+			steps:               []int64{5, 30, 60},
+			healthOffset:        20,
+			timeBetweenRollouts: 10 * time.Minute,
+			metrics: []config.Metric{
+				{Type: config.LatencyMetricsCheck, Percentile: 98},
+			},
 			shouldErr: true,
 		},
 		{
 			name: "invalid latency value",
-			config: config.WithValues([]*config.Target{
+			targets: []*config.Target{
 				config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
-			}, []int64{5, 30, 60}, 20, 30,
-				[]config.Metric{
-					{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: -1},
-				},
-			),
+			},
+			steps:               []int64{5, 30, 60},
+			healthOffset:        20,
+			timeBetweenRollouts: 10 * time.Minute,
+			metrics: []config.Metric{
+				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: -1},
+			},
 			shouldErr: true,
 		},
 	}
 
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			err := test.config.Validate(test.cliMode)
+		t.Run(test.name, func(tt *testing.T) {
+			config := config.New(test.targets, test.steps, test.healthOffset, test.timeBetweenRollouts, test.metrics)
+			err := config.Validate()
 			if test.shouldErr {
-				assert.NotNil(t, err)
+				assert.NotNil(tt, err)
 			} else {
-				assert.Nil(t, err)
+				assert.Nil(tt, err)
 			}
 		})
 	}

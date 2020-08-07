@@ -56,8 +56,8 @@ type Config struct {
 	Strategy *Strategy
 }
 
-// WithValues initializes a configuration with the given values.
-func WithValues(targets []*Target, steps []int64, healthOffset int, timeBetweenRollouts time.Duration, metrics []Metric) *Config {
+// New initializes a configuration.
+func New(targets []*Target, steps []int64, healthOffset int, timeBetweenRollouts time.Duration, metrics []Metric) *Config {
 	return &Config{
 		Targets: targets,
 		Strategy: &Strategy{
@@ -79,8 +79,8 @@ func NewTarget(project string, regions []string, labelSelector string) *Target {
 }
 
 // Validate checks if the configuration is valid.
-func (config *Config) Validate(cliMode bool) error {
-	if cliMode && config.Strategy.HealthOffsetMinute <= 0 {
+func (config *Config) Validate() error {
+	if config.Strategy.HealthOffsetMinute <= 0 {
 		return errors.Errorf("health check offset must be positive, got %d", config.Strategy.HealthOffsetMinute)
 	}
 

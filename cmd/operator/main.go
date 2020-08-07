@@ -138,8 +138,8 @@ func main() {
 	target := config.NewTarget(flProject, flRegions, flLabelSelector)
 	healthCriteria := healthCriteriaFromFlags(flMinRequestCount, flErrorRate, flLatencyP99, flLatencyP95, flLatencyP50)
 	printHealthCriteria(logger, healthCriteria)
-	cfg := config.WithValues([]*config.Target{target}, flSteps, flHealthOffsetMinute, flTimeBeweenRollouts, healthCriteria)
-	if err := cfg.Validate(flCLI); err != nil {
+	cfg := config.New([]*config.Target{target}, flSteps, flHealthOffsetMinute, flTimeBeweenRollouts, healthCriteria)
+	if err := cfg.Validate(); err != nil {
 		logger.Fatalf("invalid rollout configuration: %v", err)
 	}
 
