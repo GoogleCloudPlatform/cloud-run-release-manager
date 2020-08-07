@@ -22,6 +22,19 @@ const (
 	Unhealthy
 )
 
+func (d DiagnosisResult) String() string {
+	switch d {
+	case Inconclusive:
+		return "inconclusive"
+	case Healthy:
+		return "healthy"
+	case Unhealthy:
+		return "unhealthy"
+	default:
+		return "unknown"
+	}
+}
+
 // Diagnosis is the information about the health of the revision.
 type Diagnosis struct {
 	OverallResult DiagnosisResult

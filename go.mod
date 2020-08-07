@@ -6,7 +6,6 @@ require (
 	cloud.google.com/go v0.60.0 // indirect
 	github.com/TV4/logrus-stackdriver-formatter v0.1.0
 	github.com/go-stack/stack v1.8.0 // indirect
-	github.com/google/go-cmp v0.5.0
 	github.com/mattn/go-isatty v0.0.12
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.6.0

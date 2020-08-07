@@ -4,13 +4,6 @@ import (
 	"google.golang.org/api/run/v1"
 )
 
-// Annotations name for information related to the rollout.
-const (
-	StableRevisionAnnotation              = "rollout.cloud.run/stableRevision"
-	CandidateRevisionAnnotation           = "rollout.cloud.run/candidateRevision"
-	LastFailedCandidateRevisionAnnotation = "rollout.cloud.run/lastFailedCandidateRevision"
-)
-
 // DetectStableRevisionName returns the stable revision of the Cloud Run service.
 //
 // It first checks if there's a revision with the tag "stable". If such a
