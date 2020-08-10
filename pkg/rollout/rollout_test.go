@@ -2,6 +2,7 @@ package rollout_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	runMocker "github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/run/mock"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/config"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/rollout"
+	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/api/run/v1"
@@ -38,8 +40,14 @@ func generateService(opts *ServiceOpts) *run.Service {
 	}
 }
 
+func makeLastRolloutAnnotation(clock clockwork.Clock, offsetFromNowMinute int) string {
+	offset := time.Duration(offsetFromNowMinute) * time.Minute
+	return clock.Now().Add(offset).Format(time.RFC3339)
+}
+
 func TestUpdateService(t *testing.T) {
 	runclient := &runMocker.RunAPI{}
+	clockMock := clockwork.NewFakeClock()
 	metricsMock := &metricsMocker.Metrics{}
 	metricsMock.RequestCountFn = func(ctx context.Context, offset time.Duration) (int64, error) {
 		return 1000, nil
@@ -52,9 +60,12 @@ func TestUpdateService(t *testing.T) {
 	}
 	metricsMock.SetCandidateRevisionFn = func(revisionName string) {}
 	strategy := &config.Strategy{
-		Steps:              []int64{10, 40, 70},
-		HealthOffsetMinute: 5,
+		Steps:               []int64{10, 40, 70},
+		HealthOffsetMinute:  5,
+		TimeBetweenRollouts: 10 * time.Minute,
 	}
+
+	fmt.Println(clockMock.Now().Add(-1 * 30 * time.Minute))
 
 	var tests = []struct {
 		name        string
@@ -70,8 +81,6 @@ func TestUpdateService(t *testing.T) {
 		shouldErr      bool
 		nilService     bool
 	}{
-		// There is a revision with 100% of traffic different from stable and candidate.
-		// Make it the stable revision.
 		{
 			name: "stable revision based on traffic share",
 			traffic: []*run.TrafficTarget{
@@ -85,9 +94,10 @@ func TestUpdateService(t *testing.T) {
 				{Type: config.ErrorRateMetricsCheck, Threshold: 5},
 			},
 			outAnnotations: map[string]string{
-				rollout.LastHealthReportAnnotation:  "new candidate, no health report available yet",
 				rollout.StableRevisionAnnotation:    "test-002",
 				rollout.CandidateRevisionAnnotation: "test-003",
+				rollout.LastRolloutAnnotation:       clockMock.Now().Format(time.RFC3339),
+				rollout.LastHealthReportAnnotation:  "new candidate, no health report available yet",
 			},
 			outTraffic: []*run.TrafficTarget{
 				{RevisionName: "test-002", Percent: 100 - strategy.Steps[0], Tag: rollout.StableTag},
@@ -95,7 +105,6 @@ func TestUpdateService(t *testing.T) {
 				{LatestRevision: true, Tag: rollout.LatestTag},
 			},
 		},
-		// There's no a stable revision nor a revision handling 100% of traffic.
 		{
 			name: "no stable revision",
 			traffic: []*run.TrafficTarget{
@@ -105,7 +114,6 @@ func TestUpdateService(t *testing.T) {
 			lastReady:  "test-002",
 			nilService: true,
 		},
-		// Stable revision is the same as the latest revision. There's no candidate.
 		{
 			name: "same stable and latest revision",
 			traffic: []*run.TrafficTarget{
@@ -114,7 +122,6 @@ func TestUpdateService(t *testing.T) {
 			lastReady:  "test-001",
 			nilService: true,
 		},
-		// Candidate is new with non-existing previous candidate.
 		{
 			name: "new candidate and non-existing previous candidate",
 			traffic: []*run.TrafficTarget{
@@ -123,9 +130,10 @@ func TestUpdateService(t *testing.T) {
 			},
 			lastReady: "test-002",
 			outAnnotations: map[string]string{
-				rollout.LastHealthReportAnnotation:  "new candidate, no health report available yet",
 				rollout.StableRevisionAnnotation:    "test-001",
 				rollout.CandidateRevisionAnnotation: "test-002",
+				rollout.LastRolloutAnnotation:       makeLastRolloutAnnotation(clockMock, 0),
+				rollout.LastHealthReportAnnotation:  "new candidate, no health report available yet",
 			},
 			outTraffic: []*run.TrafficTarget{
 				{RevisionName: "test-001", Percent: 100 - strategy.Steps[0], Tag: rollout.StableTag},
@@ -133,7 +141,6 @@ func TestUpdateService(t *testing.T) {
 				{LatestRevision: true, Tag: rollout.LatestTag},
 			},
 		},
-		// Candidate is the same as before (and healthy), keep rolling forward.
 		{
 			name: "keep rolling out the same candidate",
 			traffic: []*run.TrafficTarget{
@@ -141,18 +148,22 @@ func TestUpdateService(t *testing.T) {
 				{RevisionName: "test-002", Percent: strategy.Steps[1], Tag: rollout.CandidateTag},
 				{LatestRevision: true, Tag: rollout.LatestTag},
 			},
+			annotations: map[string]string{
+				rollout.LastRolloutAnnotation: makeLastRolloutAnnotation(clockMock, -30),
+			},
 			lastReady: "test-002",
 			healthCriteria: []config.Metric{
 				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
 				{Type: config.ErrorRateMetricsCheck, Threshold: 5},
 			},
 			outAnnotations: map[string]string{
+				rollout.StableRevisionAnnotation:    "test-001",
+				rollout.CandidateRevisionAnnotation: "test-002",
+				rollout.LastRolloutAnnotation:       makeLastRolloutAnnotation(clockMock, 0),
 				rollout.LastHealthReportAnnotation: "status: healthy\n" +
 					"metrics:" +
 					"\n- request-latency[p99]: 500.00 (needs 750.00)" +
 					"\n- error-rate-percent: 1.00 (needs 5.00)",
-				rollout.StableRevisionAnnotation:    "test-001",
-				rollout.CandidateRevisionAnnotation: "test-002",
 			},
 			outTraffic: []*run.TrafficTarget{
 				{RevisionName: "test-001", Percent: 100 - strategy.Steps[2], Tag: rollout.StableTag},
@@ -160,7 +171,33 @@ func TestUpdateService(t *testing.T) {
 				{LatestRevision: true, Tag: rollout.LatestTag},
 			},
 		},
-		// Candidate is not the same as before, restart rollout with new candidate.
+		{
+			name: "healthy but not enough time has elapsed, do not roll forward",
+			traffic: []*run.TrafficTarget{
+				{RevisionName: "test-001", Percent: 100 - strategy.Steps[1], Tag: rollout.StableTag},
+				{RevisionName: "test-002", Percent: strategy.Steps[1], Tag: rollout.CandidateTag},
+				{LatestRevision: true, Tag: rollout.LatestTag},
+			},
+			annotations: map[string]string{
+				rollout.LastRolloutAnnotation: makeLastRolloutAnnotation(clockMock, 0),
+			},
+			lastReady: "test-002",
+			healthCriteria: []config.Metric{
+				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
+				{Type: config.ErrorRateMetricsCheck, Threshold: 5},
+			},
+			outAnnotations: map[string]string{
+				rollout.StableRevisionAnnotation:    "test-001",
+				rollout.CandidateRevisionAnnotation: "test-002",
+				rollout.LastRolloutAnnotation:       makeLastRolloutAnnotation(clockMock, 0),
+			},
+			outTraffic: []*run.TrafficTarget{
+				{RevisionName: "test-001", Percent: 100 - strategy.Steps[2], Tag: rollout.StableTag},
+				{RevisionName: "test-002", Percent: strategy.Steps[2], Tag: rollout.CandidateTag},
+				{LatestRevision: true, Tag: rollout.LatestTag},
+			},
+			nilService: true,
+		},
 		{
 			name: "different candidate, restart rollout",
 			traffic: []*run.TrafficTarget{
@@ -170,9 +207,10 @@ func TestUpdateService(t *testing.T) {
 			},
 			lastReady: "test-003",
 			outAnnotations: map[string]string{
-				rollout.LastHealthReportAnnotation:  "new candidate, no health report available yet",
 				rollout.StableRevisionAnnotation:    "test-001",
 				rollout.CandidateRevisionAnnotation: "test-003",
+				rollout.LastRolloutAnnotation:       makeLastRolloutAnnotation(clockMock, 0),
+				rollout.LastHealthReportAnnotation:  "new candidate, no health report available yet",
 			},
 			outTraffic: []*run.TrafficTarget{
 				{RevisionName: "test-001", Percent: 100 - strategy.Steps[0], Tag: rollout.StableTag},
@@ -180,12 +218,14 @@ func TestUpdateService(t *testing.T) {
 				{LatestRevision: true, Tag: rollout.LatestTag},
 			},
 		},
-		// Candidate was handling 100% of traffic. It's now ready to become stable.
 		{
 			name: "candidate is ready to become stable",
 			traffic: []*run.TrafficTarget{
 				{RevisionName: "test-002", Percent: 100, Tag: rollout.CandidateTag},
 				{RevisionName: "test-001", Percent: 0, Tag: rollout.StableTag},
+			},
+			annotations: map[string]string{
+				rollout.LastRolloutAnnotation: makeLastRolloutAnnotation(clockMock, -30),
 			},
 			lastReady: "test-002",
 			healthCriteria: []config.Metric{
@@ -193,18 +233,18 @@ func TestUpdateService(t *testing.T) {
 				{Type: config.ErrorRateMetricsCheck, Threshold: 5},
 			},
 			outAnnotations: map[string]string{
+				rollout.StableRevisionAnnotation: "test-002",
+				rollout.LastRolloutAnnotation:    makeLastRolloutAnnotation(clockMock, 0),
 				rollout.LastHealthReportAnnotation: "status: healthy\n" +
 					"metrics:" +
 					"\n- request-latency[p99]: 500.00 (needs 750.00)" +
 					"\n- error-rate-percent: 1.00 (needs 5.00)",
-				rollout.StableRevisionAnnotation: "test-002",
 			},
 			outTraffic: []*run.TrafficTarget{
 				{RevisionName: "test-002", Percent: 100, Tag: rollout.StableTag},
 				{LatestRevision: true, Tag: rollout.LatestTag},
 			},
 		},
-		// Candidate is unhealthy, rollback.
 		{
 			name: "unhealthy candidate, rollback",
 			traffic: []*run.TrafficTarget{
@@ -217,13 +257,14 @@ func TestUpdateService(t *testing.T) {
 				{Type: config.ErrorRateMetricsCheck, Threshold: 0.95},
 			},
 			outAnnotations: map[string]string{
+				rollout.StableRevisionAnnotation:              "test-001",
+				rollout.CandidateRevisionAnnotation:           "test-002",
+				rollout.LastFailedCandidateRevisionAnnotation: "test-002",
+				rollout.LastRolloutAnnotation:                 makeLastRolloutAnnotation(clockMock, 0),
 				rollout.LastHealthReportAnnotation: "status: unhealthy\n" +
 					"metrics:" +
 					"\n- request-latency[p99]: 500.00 (needs 100.00)" +
 					"\n- error-rate-percent: 1.00 (needs 0.95)",
-				rollout.StableRevisionAnnotation:              "test-001",
-				rollout.CandidateRevisionAnnotation:           "test-002",
-				rollout.LastFailedCandidateRevisionAnnotation: "test-002",
 			},
 			outTraffic: []*run.TrafficTarget{
 				{RevisionName: "test-001", Percent: 100, Tag: rollout.StableTag},
@@ -231,7 +272,6 @@ func TestUpdateService(t *testing.T) {
 				{LatestRevision: true, Tag: rollout.LatestTag},
 			},
 		},
-		// Last ready revision is a previously failed candidate.
 		{
 			name: "latest ready is a failed candidate",
 			annotations: map[string]string{
@@ -244,7 +284,6 @@ func TestUpdateService(t *testing.T) {
 			lastReady:  "test-002",
 			nilService: true,
 		},
-		// Inconclusive diagnosis, do nothing.
 		{
 			name: "inconclusive diagnosis",
 			traffic: []*run.TrafficTarget{
@@ -290,17 +329,17 @@ func TestUpdateService(t *testing.T) {
 		strategy.HealthCriteria = test.healthCriteria
 		lg := logrus.New()
 		lg.SetLevel(logrus.DebugLevel)
-		r := rollout.New(context.TODO(), metricsMock, svcRecord, strategy).WithClient(runclient).WithLogger(lg)
+		r := rollout.New(context.TODO(), metricsMock, svcRecord, strategy).WithClient(runclient).WithLogger(lg).WithClock(clockMock)
 
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(test.name, func(tt *testing.T) {
 			svc, err := r.UpdateService(svc)
 			if test.shouldErr {
-				assert.NotNil(t, err)
+				assert.NotNil(tt, err)
 			} else if test.nilService {
-				assert.Nil(t, svc)
+				assert.Nil(tt, svc)
 			} else {
-				assert.Equal(t, test.outAnnotations, svc.Metadata.Annotations)
-				assert.Equal(t, test.outTraffic, svc.Spec.Traffic)
+				assert.Equal(tt, test.outAnnotations, svc.Metadata.Annotations)
+				assert.Equal(tt, test.outTraffic, svc.Spec.Traffic)
 			}
 		})
 
@@ -430,9 +469,9 @@ func TestPrepareRollForward(t *testing.T) {
 
 		r := rollout.New(context.TODO(), metricsMock, svcRecord, strategy).WithClient(runclient)
 
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(test.name, func(tt *testing.T) {
 			svc = r.PrepareRollForward(svc, test.stable, test.candidate)
-			assert.Equal(t, test.expected, svc.Spec.Traffic)
+			assert.Equal(tt, test.expected, svc.Spec.Traffic)
 		})
 	}
 }

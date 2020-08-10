@@ -10,6 +10,7 @@ import (
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/util"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/config"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/health"
+	"github.com/jonboulle/clockwork"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/api/run/v1"
@@ -20,6 +21,7 @@ const (
 	StableRevisionAnnotation              = "rollout.cloud.run/stableRevision"
 	CandidateRevisionAnnotation           = "rollout.cloud.run/candidateRevision"
 	LastFailedCandidateRevisionAnnotation = "rollout.cloud.run/lastFailedCandidateRevision"
+	LastRolloutAnnotation                 = "rollout.cloud.run/lastRollout"
 	LastHealthReportAnnotation            = "rollout.cloud.run/lastHealthReport"
 )
 
@@ -41,6 +43,7 @@ type Rollout struct {
 	strategy        *config.Strategy
 	runClient       runapi.Client
 	log             *logrus.Entry
+	time            clockwork.Clock
 
 	// Used to determine if candidate should become stable during update.
 	promoteToStable bool
@@ -70,6 +73,7 @@ func New(ctx context.Context, metricsProvider metrics.Provider, svcRecord *Servi
 		region:          svcRecord.Region,
 		strategy:        strategy,
 		log:             logrus.NewEntry(logrus.New()),
+		time:            clockwork.NewRealClock(),
 	}
 }
 
@@ -82,6 +86,12 @@ func (r *Rollout) WithClient(client runapi.Client) *Rollout {
 // WithLogger updates the logger in the rollout instance.
 func (r *Rollout) WithLogger(logger *logrus.Logger) *Rollout {
 	r.log = logger.WithField("project", r.project)
+	return r
+}
+
+// WithClock updates the clock in the rollout instance.
+func (r *Rollout) WithClock(clock clockwork.Clock) *Rollout {
+	r.time = clock
 	return r
 }
 
@@ -138,19 +148,15 @@ func (r *Rollout) UpdateService(svc *run.Service) (*run.Service, error) {
 		return nil, errors.Wrapf(err, "failed to diagnose health for candidate %q", candidate)
 	}
 
-	switch diagnosis.OverallResult {
-	case health.Inconclusive:
-		r.log.Debug("health check inconclusive")
+	svc, err = r.updateServiceBasedOnDiagnosis(svc, diagnosis.OverallResult, stable, candidate)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to update service after diagnosis")
+	}
+	if svc == nil {
+		// If service was unchanged, nil is returned.
+		// TODO(gvso): This should go away once we start getting traffic config
+		// object from updateServiceBasedOnDiagnosis.
 		return nil, nil
-	case health.Healthy:
-		r.log.Debug("healthy candidate, roll forward")
-		svc = r.PrepareRollForward(svc, stable, candidate)
-	case health.Unhealthy:
-		r.log.Info("unhealthy candidate, rollback")
-		r.shouldRollback = true
-		svc = r.PrepareRollback(svc, stable, candidate)
-	default:
-		return nil, errors.Errorf("invalid candidate's health diagnosis %v", diagnosis.OverallResult)
 	}
 
 	svc = r.updateAnnotations(svc, stable, candidate)
@@ -210,6 +216,42 @@ func (r *Rollout) PrepareRollback(svc *run.Service, stable, candidate string) *r
 
 	svc.Spec.Traffic = traffic
 	return svc
+}
+
+// updateServiceBasedOnDiagnosis updates a service's traffic configuration
+// based on the diagnosis.
+// If service was unchanged, nil is returned.
+//
+// TODO (gvso): Refactor this and other methods to return only a traffic object.
+// Then, rename this to trafficBasedOnDiagnosis.
+// Also, move those traffic-config-related methods to traffic.go file.
+func (r *Rollout) updateServiceBasedOnDiagnosis(svc *run.Service, diagnosis health.DiagnosisResult, stable, candidate string) (*run.Service, error) {
+	switch diagnosis {
+	case health.Inconclusive:
+		r.log.Debug("health check inconclusive")
+		return nil, nil
+	case health.Healthy:
+		r.log.Debug("healthy candidate")
+		lastRollout := svc.Metadata.Annotations[LastRolloutAnnotation]
+		enoughTime, err := r.hasEnoughTimeElapsed(lastRollout, r.strategy.TimeBetweenRollouts)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not determine if roll out is allowed")
+		}
+		if !enoughTime {
+			r.log.WithField("lastRollout", lastRollout).Debug("no enough time elapsed since last roll out")
+			return nil, nil
+		}
+		r.log.Debug("rolling forward")
+		svc = r.PrepareRollForward(svc, stable, candidate)
+	case health.Unhealthy:
+		r.log.Info("unhealthy candidate, rollback")
+		r.shouldRollback = true
+		svc = r.PrepareRollback(svc, stable, candidate)
+	default:
+		return nil, errors.Errorf("invalid candidate's health diagnosis %v", diagnosis)
+	}
+
+	return svc, nil
 }
 
 // replaceService updates the service object in Cloud Run.
@@ -294,6 +336,9 @@ func (r *Rollout) nextCandidateTraffic(current int64) int64 {
 
 // updateAnnotations updates the annotations to keep some state about the rollout.
 func (r *Rollout) updateAnnotations(svc *run.Service, stable, candidate string) *run.Service {
+	now := r.time.Now().Format(time.RFC3339)
+	setAnnotation(svc, LastRolloutAnnotation, now)
+
 	// The candidate has become the stable revision.
 	if r.promoteToStable {
 		setAnnotation(svc, StableRevisionAnnotation, candidate)
@@ -332,6 +377,23 @@ func (r *Rollout) diagnoseCandidate(candidate string, healthCriteria []config.Me
 	r.log.Debug("diagnosing candidate's health")
 	d, err = health.Diagnose(ctx, healthCriteria, metricsValues)
 	return d, errors.Wrap(err, "failed to diagnose candidate's health")
+}
+
+// hasEnoughTimeElapsed determines if enough time has elapsed since last
+// rollout.
+//
+// TODO: what if lastRolloutStr is always invalid?
+func (r *Rollout) hasEnoughTimeElapsed(lastRolloutStr string, timeBetweenRollouts time.Duration) (bool, error) {
+	if lastRolloutStr == "" {
+		return false, errors.Errorf("%s annotation is missing", LastRolloutAnnotation)
+	}
+	lastRollout, err := time.Parse(time.RFC3339, lastRolloutStr)
+	if err != nil {
+		return false, errors.Wrap(err, "failed to parse last roll out time")
+	}
+
+	currentTime := r.time.Now()
+	return currentTime.Sub(lastRollout) >= timeBetweenRollouts, nil
 }
 
 // newTrafficTarget returns a new traffic target instance.
