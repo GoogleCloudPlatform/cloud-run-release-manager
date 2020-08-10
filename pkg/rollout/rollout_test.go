@@ -59,7 +59,7 @@ func TestUpdateService(t *testing.T) {
 		return 0.01, nil
 	}
 	metricsMock.SetCandidateRevisionFn = func(revisionName string) {}
-	strategy := &config.Strategy{
+	strategy := config.Strategy{
 		Steps:               []int64{10, 40, 70},
 		HealthOffsetMinute:  5,
 		TimeBetweenRollouts: 10 * time.Minute,
@@ -75,7 +75,7 @@ func TestUpdateService(t *testing.T) {
 
 		// See the metrics mock to know what would make the diagnosis the needed
 		// value for testing.
-		healthCriteria []config.Metric
+		healthCriteria []config.HealthCriterion
 		outAnnotations map[string]string
 		outTraffic     []*run.TrafficTarget
 		shouldErr      bool
@@ -89,9 +89,9 @@ func TestUpdateService(t *testing.T) {
 				{RevisionName: "test-003", Percent: 0, Tag: rollout.CandidateTag},
 			},
 			lastReady: "test-003",
-			healthCriteria: []config.Metric{
-				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
-				{Type: config.ErrorRateMetricsCheck, Threshold: 5},
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
+				{Metric: config.ErrorRateMetricsCheck, Threshold: 5},
 			},
 			outAnnotations: map[string]string{
 				rollout.StableRevisionAnnotation:    "test-002",
@@ -152,9 +152,9 @@ func TestUpdateService(t *testing.T) {
 				rollout.LastRolloutAnnotation: makeLastRolloutAnnotation(clockMock, -30),
 			},
 			lastReady: "test-002",
-			healthCriteria: []config.Metric{
-				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
-				{Type: config.ErrorRateMetricsCheck, Threshold: 5},
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
+				{Metric: config.ErrorRateMetricsCheck, Threshold: 5},
 			},
 			outAnnotations: map[string]string{
 				rollout.StableRevisionAnnotation:    "test-001",
@@ -182,9 +182,9 @@ func TestUpdateService(t *testing.T) {
 				rollout.LastRolloutAnnotation: makeLastRolloutAnnotation(clockMock, 0),
 			},
 			lastReady: "test-002",
-			healthCriteria: []config.Metric{
-				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
-				{Type: config.ErrorRateMetricsCheck, Threshold: 5},
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
+				{Metric: config.ErrorRateMetricsCheck, Threshold: 5},
 			},
 			outAnnotations: map[string]string{
 				rollout.StableRevisionAnnotation:    "test-001",
@@ -228,9 +228,9 @@ func TestUpdateService(t *testing.T) {
 				rollout.LastRolloutAnnotation: makeLastRolloutAnnotation(clockMock, -30),
 			},
 			lastReady: "test-002",
-			healthCriteria: []config.Metric{
-				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
-				{Type: config.ErrorRateMetricsCheck, Threshold: 5},
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
+				{Metric: config.ErrorRateMetricsCheck, Threshold: 5},
 			},
 			outAnnotations: map[string]string{
 				rollout.StableRevisionAnnotation: "test-002",
@@ -252,9 +252,9 @@ func TestUpdateService(t *testing.T) {
 				{RevisionName: "test-001", Percent: 80, Tag: rollout.StableTag},
 			},
 			lastReady: "test-002",
-			healthCriteria: []config.Metric{
-				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 100},
-				{Type: config.ErrorRateMetricsCheck, Threshold: 0.95},
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 100},
+				{Metric: config.ErrorRateMetricsCheck, Threshold: 0.95},
 			},
 			outAnnotations: map[string]string{
 				rollout.StableRevisionAnnotation:              "test-001",
@@ -291,9 +291,9 @@ func TestUpdateService(t *testing.T) {
 				{RevisionName: "test-001", Percent: 80, Tag: rollout.StableTag},
 			},
 			lastReady: "test-002",
-			healthCriteria: []config.Metric{
-				{Type: config.RequestCountMetricsCheck, Threshold: 1500},
-				{Type: config.ErrorRateMetricsCheck, Threshold: 0.95},
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.RequestCountMetricsCheck, Threshold: 1500},
+				{Metric: config.ErrorRateMetricsCheck, Threshold: 0.95},
 			},
 			nilService: true,
 		},
@@ -305,8 +305,8 @@ func TestUpdateService(t *testing.T) {
 				{RevisionName: "test-001", Percent: 80, Tag: rollout.StableTag},
 			},
 			lastReady: "test-002",
-			healthCriteria: []config.Metric{
-				{Type: config.RequestCountMetricsCheck, Threshold: 500},
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.RequestCountMetricsCheck, Threshold: 500},
 			},
 			shouldErr: true,
 		},
@@ -349,7 +349,7 @@ func TestUpdateService(t *testing.T) {
 func TestPrepareRollForward(t *testing.T) {
 	runclient := &runMocker.RunAPI{}
 	metricsMock := &metricsMocker.Metrics{}
-	strategy := &config.Strategy{
+	strategy := config.Strategy{
 		Steps: []int64{5, 30, 60},
 	}
 
@@ -497,7 +497,7 @@ func TestPrepareRollback(t *testing.T) {
 	svc := generateService(&ServiceOpts{Traffic: traffic})
 	svcRecord := &rollout.ServiceRecord{Service: svc}
 
-	r := rollout.New(context.TODO(), metricsMock, svcRecord, &config.Strategy{})
+	r := rollout.New(context.TODO(), metricsMock, svcRecord, config.Strategy{})
 	svc = r.PrepareRollback(svc, stable, candidate)
 	assert.Equal(t, expectedTraffic, svc.Spec.Traffic)
 }

@@ -138,7 +138,8 @@ func main() {
 	target := config.NewTarget(flProject, flRegions, flLabelSelector)
 	healthCriteria := healthCriteriaFromFlags(flMinRequestCount, flErrorRate, flLatencyP99, flLatencyP95, flLatencyP50)
 	printHealthCriteria(logger, healthCriteria)
-	cfg := config.New([]*config.Target{target}, flSteps, flHealthOffsetMinute, flTimeBeweenRollouts, healthCriteria)
+	strategy := config.NewStrategy(target, flSteps, flHealthOffsetMinute, flTimeBeweenRollouts, healthCriteria)
+	cfg := &config.Config{Strategies: []config.Strategy{strategy}}
 	if err := cfg.Validate(); err != nil {
 		logger.Fatalf("invalid rollout configuration: %v", err)
 	}
@@ -155,7 +156,8 @@ func main() {
 
 func runDaemon(ctx context.Context, logger *logrus.Logger, cfg *config.Config) {
 	for {
-		errs := runRollouts(ctx, logger, cfg)
+		// TODO(gvso): Handle all the strategies.
+		errs := runRollouts(ctx, logger, cfg.Strategies[0])
 		errsStr := rolloutErrsToString(errs)
 		if len(errs) != 0 {
 			logger.Warnf("there were %d errors: \n%s", len(errs), errsStr)
@@ -203,33 +205,33 @@ func chooseMetricsProvider(ctx context.Context, logger *logrus.Entry, project, r
 
 // healthCriteriaFromFlags checks the metrics-related flags and return an array
 // of config.Metric based on them.
-func healthCriteriaFromFlags(requestCount int, errorRate, latencyP99, latencyP95, latencyP50 float64) []config.Metric {
-	metrics := []config.Metric{
-		{Type: config.ErrorRateMetricsCheck, Threshold: errorRate},
-		{Type: config.RequestCountMetricsCheck, Threshold: float64(requestCount)},
+func healthCriteriaFromFlags(requestCount int, errorRate, latencyP99, latencyP95, latencyP50 float64) []config.HealthCriterion {
+	metrics := []config.HealthCriterion{
+		{Metric: config.ErrorRateMetricsCheck, Threshold: errorRate},
+		{Metric: config.RequestCountMetricsCheck, Threshold: float64(requestCount)},
 	}
 
 	if latencyP99 > 0 {
-		metrics = append(metrics, config.Metric{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: latencyP99})
+		metrics = append(metrics, config.HealthCriterion{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: latencyP99})
 	}
 	if latencyP95 > 0 {
-		metrics = append(metrics, config.Metric{Type: config.LatencyMetricsCheck, Percentile: 95, Threshold: latencyP95})
+		metrics = append(metrics, config.HealthCriterion{Metric: config.LatencyMetricsCheck, Percentile: 95, Threshold: latencyP95})
 	}
 	if latencyP50 > 0 {
-		metrics = append(metrics, config.Metric{Type: config.LatencyMetricsCheck, Percentile: 50, Threshold: latencyP50})
+		metrics = append(metrics, config.HealthCriterion{Metric: config.LatencyMetricsCheck, Percentile: 50, Threshold: latencyP50})
 	}
 
 	return metrics
 }
 
-func printHealthCriteria(logger *logrus.Logger, healthCriteria []config.Metric) {
+func printHealthCriteria(logger *logrus.Logger, healthCriteria []config.HealthCriterion) {
 	for _, criteria := range healthCriteria {
 		lg := logger.WithFields(logrus.Fields{
-			"metricsType": criteria.Type,
+			"metricsType": criteria.Metric,
 			"threshold":   criteria.Threshold,
 		})
 
-		switch criteria.Type {
+		switch criteria.Metric {
 		case config.ErrorRateMetricsCheck:
 			lg.Debug("found health criterion")
 		case config.LatencyMetricsCheck:

@@ -59,7 +59,7 @@ type CheckResult struct {
 //
 // Otherwise, all metrics criteria are checked to determine whether the revision
 // is healthy or not.
-func Diagnose(ctx context.Context, healthCriteria []config.Metric, actualValues []float64) (Diagnosis, error) {
+func Diagnose(ctx context.Context, healthCriteria []config.HealthCriterion, actualValues []float64) (Diagnosis, error) {
 	logger := util.LoggerFrom(ctx)
 	if len(healthCriteria) != len(actualValues) {
 		return Diagnosis{Unknown, nil}, errors.New("the size of health criteria is not the same to the size of the actual metrics values")
@@ -73,15 +73,15 @@ func Diagnose(ctx context.Context, healthCriteria []config.Metric, actualValues 
 	for i, value := range actualValues {
 		criteria := healthCriteria[i]
 		logger := logger.WithFields(logrus.Fields{
-			"metricsType": criteria.Type,
+			"metrics":     criteria.Metric,
 			"percentile":  criteria.Percentile,
 			"threshold":   criteria.Threshold,
 			"actualValue": value,
 		})
-		isMet := isCriteriaMet(criteria.Type, criteria.Threshold, value)
+		isMet := isCriteriaMet(criteria.Metric, criteria.Threshold, value)
 
 		// For unmet request count, return inconclusive and empty results.
-		if !isMet && criteria.Type == config.RequestCountMetricsCheck {
+		if !isMet && criteria.Metric == config.RequestCountMetricsCheck {
 			logger.Debug("unmet criterion")
 			diagnosis = Inconclusive
 			results = nil
@@ -97,7 +97,7 @@ func Diagnose(ctx context.Context, healthCriteria []config.Metric, actualValues 
 		}
 
 		// Only switch to healthy once a first criteria is met.
-		if diagnosis == Unknown && criteria.Type != config.RequestCountMetricsCheck {
+		if diagnosis == Unknown && criteria.Metric != config.RequestCountMetricsCheck {
 			diagnosis = Healthy
 		}
 		result.IsCriteriaMet = true
@@ -110,7 +110,7 @@ func Diagnose(ctx context.Context, healthCriteria []config.Metric, actualValues 
 
 // CollectMetrics gets a metrics value for each of the given health criteria and
 // returns a result for each criterion.
-func CollectMetrics(ctx context.Context, provider metrics.Provider, offset time.Duration, healthCriteria []config.Metric) ([]float64, error) {
+func CollectMetrics(ctx context.Context, provider metrics.Provider, offset time.Duration, healthCriteria []config.HealthCriterion) ([]float64, error) {
 	if len(healthCriteria) == 0 {
 		return nil, errors.New("health criteria must be specified")
 	}
@@ -119,7 +119,7 @@ func CollectMetrics(ctx context.Context, provider metrics.Provider, offset time.
 		var metricsValue float64
 		var err error
 
-		switch criteria.Type {
+		switch criteria.Metric {
 		case config.RequestCountMetricsCheck:
 			metricsValue, err = requestCount(ctx, provider, offset)
 		case config.LatencyMetricsCheck:
@@ -127,11 +127,11 @@ func CollectMetrics(ctx context.Context, provider metrics.Provider, offset time.
 		case config.ErrorRateMetricsCheck:
 			metricsValue, err = errorRatePercent(ctx, provider, offset)
 		default:
-			return nil, errors.Errorf("unimplemented metrics %q", criteria.Type)
+			return nil, errors.Errorf("unimplemented metrics %q", criteria.Metric)
 		}
 
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to obtain metrics %q", criteria.Type)
+			return nil, errors.Wrapf(err, "failed to obtain metrics %q", criteria.Metric)
 		}
 		metricsValues = append(metricsValues, metricsValue)
 	}

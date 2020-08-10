@@ -12,7 +12,8 @@ import (
 func makeRolloutHandler(logger *logrus.Logger, cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		ctx := req.Context()
-		errs := runRollouts(ctx, logger, cfg)
+		// TODO(gvso): Handle all the strategies.
+		errs := runRollouts(ctx, logger, cfg.Strategies[0])
 		errsStr := rolloutErrsToString(errs)
 		if len(errs) != 0 {
 			msg := fmt.Sprintf("there were %d errors: \n%s", len(errs), errsStr)

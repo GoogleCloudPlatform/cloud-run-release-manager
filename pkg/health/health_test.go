@@ -15,16 +15,16 @@ import (
 func TestDiagnosis(t *testing.T) {
 	tests := []struct {
 		name           string
-		healthCriteria []config.Metric
+		healthCriteria []config.HealthCriterion
 		results        []float64
 		expected       health.Diagnosis
 		shouldErr      bool
 	}{
 		{
 			name: "healthy revision",
-			healthCriteria: []config.Metric{
-				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
-				{Type: config.ErrorRateMetricsCheck, Threshold: 5},
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
+				{Metric: config.ErrorRateMetricsCheck, Threshold: 5},
 			},
 			results: []float64{500.0, 1.0},
 			expected: health.Diagnosis{
@@ -37,9 +37,9 @@ func TestDiagnosis(t *testing.T) {
 		},
 		{
 			name: "barely healthy revision",
-			healthCriteria: []config.Metric{
-				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 500},
-				{Type: config.ErrorRateMetricsCheck, Threshold: 1},
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 500},
+				{Metric: config.ErrorRateMetricsCheck, Threshold: 1},
 			},
 			results: []float64{500.0, 1.0},
 			expected: health.Diagnosis{
@@ -52,9 +52,9 @@ func TestDiagnosis(t *testing.T) {
 		},
 		{
 			name: "no enough requests, inconclusive",
-			healthCriteria: []config.Metric{
-				{Type: config.RequestCountMetricsCheck, Threshold: 1000},
-				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 500},
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.RequestCountMetricsCheck, Threshold: 1000},
+				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 500},
 			},
 			results: []float64{800, 750.0},
 			expected: health.Diagnosis{
@@ -64,8 +64,8 @@ func TestDiagnosis(t *testing.T) {
 		},
 		{
 			name: "only request count criteria, unknown",
-			healthCriteria: []config.Metric{
-				{Type: config.RequestCountMetricsCheck, Threshold: 1000},
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.RequestCountMetricsCheck, Threshold: 1000},
 			},
 			results: []float64{1500},
 			expected: health.Diagnosis{
@@ -77,8 +77,8 @@ func TestDiagnosis(t *testing.T) {
 		},
 		{
 			name: "unhealthy revision, miss latency",
-			healthCriteria: []config.Metric{
-				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 499},
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 499},
 			},
 			results: []float64{500.0},
 			expected: health.Diagnosis{
@@ -90,8 +90,8 @@ func TestDiagnosis(t *testing.T) {
 		},
 		{
 			name: "unhealthy revision, miss error rate",
-			healthCriteria: []config.Metric{
-				{Type: config.ErrorRateMetricsCheck, Threshold: 0.95},
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.ErrorRateMetricsCheck, Threshold: 0.95},
 			},
 			results: []float64{1.0},
 			expected: health.Diagnosis{
@@ -103,9 +103,9 @@ func TestDiagnosis(t *testing.T) {
 		},
 		{
 			name: "zero threshold",
-			healthCriteria: []config.Metric{
-				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 0},
-				{Type: config.ErrorRateMetricsCheck, Threshold: 0},
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 0},
+				{Metric: config.ErrorRateMetricsCheck, Threshold: 0},
 			},
 			results: []float64{500.0, 1.0},
 			expected: health.Diagnosis{
@@ -118,9 +118,9 @@ func TestDiagnosis(t *testing.T) {
 		},
 		{
 			name: "zero metrics values",
-			healthCriteria: []config.Metric{
-				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
-				{Type: config.ErrorRateMetricsCheck, Threshold: 5},
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
+				{Metric: config.ErrorRateMetricsCheck, Threshold: 5},
 			},
 			results: []float64{0, 0},
 			expected: health.Diagnosis{
@@ -133,8 +133,8 @@ func TestDiagnosis(t *testing.T) {
 		},
 		{
 			name: "should err, different sizes for criteria and results",
-			healthCriteria: []config.Metric{
-				{Type: config.ErrorRateMetricsCheck, Threshold: 0.95},
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.ErrorRateMetricsCheck, Threshold: 0.95},
 			},
 			results:   []float64{},
 			shouldErr: true,
@@ -174,10 +174,10 @@ func TestCollectMetrics(t *testing.T) {
 
 	ctx := context.Background()
 	offset := 5 * time.Minute
-	healthCriteria := []config.Metric{
-		{Type: config.RequestCountMetricsCheck},
-		{Type: config.LatencyMetricsCheck, Percentile: 99},
-		{Type: config.ErrorRateMetricsCheck},
+	healthCriteria := []config.HealthCriterion{
+		{Metric: config.RequestCountMetricsCheck},
+		{Metric: config.LatencyMetricsCheck, Percentile: 99},
+		{Metric: config.ErrorRateMetricsCheck},
 	}
 	expected := []float64{1000, 500.0, 1.0}
 

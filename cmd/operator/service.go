@@ -15,7 +15,7 @@ import (
 
 // getTargetedServices returned a list of service records that match the target
 // configuration.
-func getTargetedServices(ctx context.Context, logger *logrus.Logger, targets []*config.Target) ([]*rollout.ServiceRecord, error) {
+func getTargetedServices(ctx context.Context, logger *logrus.Logger, target config.Target) ([]*rollout.ServiceRecord, error) {
 	logger.Debug("querying Cloud Run API to get all targeted services")
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -27,32 +27,30 @@ func getTargetedServices(ctx context.Context, logger *logrus.Logger, targets []*
 		wg          sync.WaitGroup
 	)
 
-	for _, target := range targets {
-		regions, err := determineRegions(ctx, logger, target)
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot determine regions")
-		}
+	regions, err := determineRegions(ctx, logger, target)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot determine regions")
+	}
 
-		for _, region := range regions {
-			wg.Add(1)
+	for _, region := range regions {
+		wg.Add(1)
 
-			go func(ctx context.Context, logger *logrus.Logger, region, labelSelector string) {
-				defer wg.Done()
-				svcs, err := getServicesByRegionAndLabel(ctx, logger, target.Project, region, target.LabelSelector)
-				if err != nil {
-					retError = err
-					cancel()
-					return
-				}
+		go func(ctx context.Context, logger *logrus.Logger, region, labelSelector string) {
+			defer wg.Done()
+			svcs, err := getServicesByRegionAndLabel(ctx, logger, target.Project, region, target.LabelSelector)
+			if err != nil {
+				retError = err
+				cancel()
+				return
+			}
 
-				for _, svc := range svcs {
-					mu.Lock()
-					retServices = append(retServices, newServiceRecord(svc, target.Project, region))
-					mu.Unlock()
-				}
+			for _, svc := range svcs {
+				mu.Lock()
+				retServices = append(retServices, newServiceRecord(svc, target.Project, region))
+				mu.Unlock()
+			}
 
-			}(ctx, logger, region, target.LabelSelector)
-		}
+		}(ctx, logger, region, target.LabelSelector)
 	}
 
 	wg.Wait()
@@ -86,7 +84,7 @@ func getServicesByRegionAndLabel(ctx context.Context, logger *logrus.Logger, pro
 //
 // If the target configuration does not specify any regions, the entire list of
 // regions is retrieved from API.
-func determineRegions(ctx context.Context, logger *logrus.Logger, target *config.Target) ([]string, error) {
+func determineRegions(ctx context.Context, logger *logrus.Logger, target config.Target) ([]string, error) {
 	regions := target.Regions
 	if len(regions) != 0 {
 		logger.Debug("using predefined list of regions, skip querying from API")

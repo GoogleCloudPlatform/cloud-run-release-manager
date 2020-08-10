@@ -8,7 +8,7 @@ import (
 )
 
 func TestNextCandidateTraffic100(t *testing.T) {
-	strategy := &config.Strategy{
+	strategy := config.Strategy{
 		Steps: []int64{5, 30, 60},
 	}
 	r := &Rollout{strategy: strategy}

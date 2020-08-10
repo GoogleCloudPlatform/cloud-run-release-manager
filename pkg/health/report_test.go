@@ -11,14 +11,14 @@ import (
 func TestStringReport(t *testing.T) {
 	tests := []struct {
 		name           string
-		healthCriteria []config.Metric
+		healthCriteria []config.HealthCriterion
 		diagnosis      health.Diagnosis
 		expected       string
 	}{
 		{
 			name: "single metrics",
-			healthCriteria: []config.Metric{
-				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
 			},
 			diagnosis: health.Diagnosis{
 				OverallResult: health.Unhealthy,
@@ -32,10 +32,10 @@ func TestStringReport(t *testing.T) {
 		},
 		{
 			name: "more than one metrics",
-			healthCriteria: []config.Metric{
-				{Type: config.RequestCountMetricsCheck, Threshold: 1000},
-				{Type: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
-				{Type: config.ErrorRateMetricsCheck, Threshold: 5},
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.RequestCountMetricsCheck, Threshold: 1000},
+				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
+				{Metric: config.ErrorRateMetricsCheck, Threshold: 5},
 			},
 			diagnosis: health.Diagnosis{
 				OverallResult: health.Healthy,

@@ -7,24 +7,24 @@ import (
 )
 
 // StringReport returns a human-readable report of the diagnosis.
-func StringReport(healthCriteria []config.Metric, diagnosis Diagnosis) string {
+func StringReport(healthCriteria []config.HealthCriterion, diagnosis Diagnosis) string {
 	report := fmt.Sprintf("status: %s\n", diagnosis.OverallResult.String())
 	report += "metrics:"
 	for i, result := range diagnosis.CheckResults {
 		criteria := healthCriteria[i]
 
 		// Include percentile value for latency criteria.
-		if criteria.Type == config.LatencyMetricsCheck {
-			report += fmt.Sprintf("\n- %s[p%.0f]: %.2f (needs %.2f)", criteria.Type, criteria.Percentile, result.ActualValue, criteria.Threshold)
+		if criteria.Metric == config.LatencyMetricsCheck {
+			report += fmt.Sprintf("\n- %s[p%.0f]: %.2f (needs %.2f)", criteria.Metric, criteria.Percentile, result.ActualValue, criteria.Threshold)
 			continue
 		}
 
 		format := "\n- %s: %.2f (needs %.2f)"
-		if criteria.Type == config.RequestCountMetricsCheck {
+		if criteria.Metric == config.RequestCountMetricsCheck {
 			// No decimals for request count.
 			format = "\n- %s: %.0f (needs %.0f)"
 		}
-		report += fmt.Sprintf(format, criteria.Type, result.ActualValue, criteria.Threshold)
+		report += fmt.Sprintf(format, criteria.Metric, result.ActualValue, criteria.Threshold)
 	}
 
 	return report

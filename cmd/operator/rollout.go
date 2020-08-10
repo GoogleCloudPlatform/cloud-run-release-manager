@@ -13,8 +13,8 @@ import (
 )
 
 // runRollouts concurrently handles the rollout of the targeted services.
-func runRollouts(ctx context.Context, logger *logrus.Logger, cfg *config.Config) []error {
-	svcs, err := getTargetedServices(ctx, logger, cfg.Targets)
+func runRollouts(ctx context.Context, logger *logrus.Logger, strategy config.Strategy) []error {
+	svcs, err := getTargetedServices(ctx, logger, strategy.Target)
 	if err != nil {
 		return []error{errors.Wrap(err, "failed to get targeted services")}
 	}
@@ -29,7 +29,7 @@ func runRollouts(ctx context.Context, logger *logrus.Logger, cfg *config.Config)
 	)
 	for _, svc := range svcs {
 		wg.Add(1)
-		go func(ctx context.Context, lg *logrus.Logger, svc *rollout.ServiceRecord, strategy *config.Strategy) {
+		go func(ctx context.Context, lg *logrus.Logger, svc *rollout.ServiceRecord, strategy config.Strategy) {
 			defer wg.Done()
 			err := handleRollout(ctx, lg, svc, strategy)
 			if err != nil {
@@ -38,7 +38,7 @@ func runRollouts(ctx context.Context, logger *logrus.Logger, cfg *config.Config)
 				errs = append(errs, err)
 				mu.Unlock()
 			}
-		}(ctx, logger, svc, cfg.Strategy)
+		}(ctx, logger, svc, strategy)
 	}
 	wg.Wait()
 
@@ -46,7 +46,7 @@ func runRollouts(ctx context.Context, logger *logrus.Logger, cfg *config.Config)
 }
 
 // handleRollout manages the rollout process for a single service.
-func handleRollout(ctx context.Context, logger *logrus.Logger, service *rollout.ServiceRecord, strategy *config.Strategy) error {
+func handleRollout(ctx context.Context, logger *logrus.Logger, service *rollout.ServiceRecord, strategy config.Strategy) error {
 	lg := logger.WithFields(logrus.Fields{
 		"project": service.Project,
 		"service": service.Metadata.Name,

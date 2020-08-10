@@ -40,7 +40,7 @@ type Rollout struct {
 	serviceName     string
 	project         string
 	region          string
-	strategy        *config.Strategy
+	strategy        config.Strategy
 	runClient       runapi.Client
 	log             *logrus.Entry
 	time            clockwork.Clock
@@ -60,7 +60,7 @@ const (
 )
 
 // New returns a new rollout manager.
-func New(ctx context.Context, metricsProvider metrics.Provider, svcRecord *ServiceRecord, strategy *config.Strategy) *Rollout {
+func New(ctx context.Context, metricsProvider metrics.Provider, svcRecord *ServiceRecord, strategy config.Strategy) *Rollout {
 	logger := logrus.New()
 	logger.SetOutput(ioutil.Discard)
 
@@ -364,7 +364,7 @@ func setAnnotation(svc *run.Service, key, value string) {
 }
 
 // diagnoseCandidate returns the candidate's diagnosis based on metrics.
-func (r *Rollout) diagnoseCandidate(candidate string, healthCriteria []config.Metric) (d health.Diagnosis, err error) {
+func (r *Rollout) diagnoseCandidate(candidate string, healthCriteria []config.HealthCriterion) (d health.Diagnosis, err error) {
 	healthCheckOffset := time.Duration(r.strategy.HealthOffsetMinute) * time.Minute
 	r.log.Debug("collecting metrics from API")
 	ctx := util.ContextWithLogger(r.ctx, r.log)
