@@ -93,7 +93,7 @@ func init() {
 	flag.StringVar(&flHTTPAddr, "http-addr", defaultAddr, "address where to listen to http requests (e.g. :8080)")
 	flag.StringVar(&flProject, "project", "", "project in which the service is deployed")
 	flag.StringVar(&flLabelSelector, "label", "rollout-strategy=gradual", "filter services based on a label (e.g. team=backend)")
-	flag.StringVar(&flRegionsString, "regions", "", "the Cloud Run regions where the service should be looked at")
+	flag.StringVar(&flRegionsString, "regions", "", "the Cloud Run regions where the services should be looked at")
 	flag.Var(&flSteps, "step", "a percentage in traffic the candidate should go through")
 	flag.StringVar(&flStepsString, "steps", "5,20,50,80", "define steps in one flag separated by commas (e.g. 5,30,60)")
 	flag.IntVar(&flHealthOffsetMinute, "healthcheck-offset", 30, "use metrics from the last N minutes relative to current rollout process")
