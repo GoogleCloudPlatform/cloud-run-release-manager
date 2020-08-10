@@ -96,6 +96,7 @@ func (p *Provider) RequestCount(ctx context.Context, offset time.Duration) (int6
 }
 
 // Latency returns the latency for the resource for the given offset.
+// It returns 0 if no request was made during the interval.
 func (p *Provider) Latency(ctx context.Context, offset time.Duration, alignReduceType metrics.AlignReduce) (float64, error) {
 	query := p.query.addFilter("metric.type", requestLatencies)
 	endTime := time.Now()
@@ -129,7 +130,7 @@ func (p *Provider) Latency(ctx context.Context, offset time.Duration, alignReduc
 
 	// This happens when no request was made during the given offset.
 	if len(timeSeries) == 0 {
-		return 0, errors.New("no request in interval")
+		return 0, nil
 	}
 	// The request count is aggregated for the entire service, so only one time
 	// series and a point is returned. There's no need for a loop.
@@ -141,6 +142,7 @@ func (p *Provider) Latency(ctx context.Context, offset time.Duration, alignReduc
 }
 
 // ErrorRate returns the rate of 5xx errors for the resource in the given offset.
+// It returns 0 if no request was made during the interval.
 func (p *Provider) ErrorRate(ctx context.Context, offset time.Duration) (float64, error) {
 	query := p.query.addFilter("metric.type", requestCount)
 	endTime := time.Now()
@@ -168,6 +170,11 @@ func (p *Provider) ErrorRate(ctx context.Context, offset time.Duration) (float64
 	if err != nil {
 		return 0, errors.Wrap(err, "error when querying for time series")
 	}
+
+	// This happens when no request was made during the given offset.
+	if len(timeSeries) == 0 {
+		return 0, nil
+	}
 	return calculateErrorResponseRate(timeSeries)
 }
 
@@ -188,27 +195,25 @@ func makeRequestForTimeSeries(logger *logrus.Entry, req *monitoring.ProjectsTime
 
 // calculateErrorResponseRate calculates the percentage of 5xx error response.
 //
-// It obtains all the successful responses (2xx) and the error responses (5xx),
-// add them up to form a 'total'. Then, it divides the number of error responses
-// by the total.
+// It gets all the server responses and calculates the error rate by performing
+// the operation (5xx responses / all responses). Then, it divides the number of
+// error responses by the total.
 func calculateErrorResponseRate(timeSeries []*monitoring.TimeSeries) (float64, error) {
-	var errorResponseCount, successfulResponseCount int64
+	var errorResponseCount, totalResponses int64
 	for _, series := range timeSeries {
 		// Because the interval and the series aligner are the same, only one
 		// point is returned per time series.
 		switch series.Metric.Labels["response_code_class"] {
 		case "5xx":
 			errorResponseCount += *(series.Points[0].Value.Int64Value)
-			break
 		default:
-			successfulResponseCount += *(series.Points[0].Value.Int64Value)
-			break
+			totalResponses += *(series.Points[0].Value.Int64Value)
 		}
 	}
 
-	totalResponses := errorResponseCount + successfulResponseCount
+	totalResponses += errorResponseCount
 	if totalResponses == 0 {
-		return 0, errors.New("no requests in interval")
+		return 0, nil
 	}
 
 	rate := float64(errorResponseCount) / float64(totalResponses)
@@ -220,15 +225,12 @@ func alignerAndReducer(alignReduceType metrics.AlignReduce) (aligner string, red
 	case metrics.Align99Reduce99:
 		aligner = "ALIGN_PERCENTILE_99"
 		reducer = "REDUCE_PERCENTILE_99"
-		break
 	case metrics.Align95Reduce95:
 		aligner = "ALIGN_PERCENTILE_95"
 		reducer = "REDUCE_PERCENTILE_50"
-		break
 	case metrics.Align50Reduce50:
 		aligner = "ALIGN_PERCENTILE_50"
 		reducer = "REDUCE_PERCENTILE_50"
-		break
 	}
 
 	return

@@ -32,10 +32,12 @@ type Provider interface {
 
 	// Returns the request latency after applying the specified series aligner
 	// and cross series reducer. The result is in milliseconds.
+	// It returns 0 if no request was made during the interval.
 	Latency(ctx context.Context, offset time.Duration, alignReduceType AlignReduce) (float64, error)
 
 	// Gets all the server responses and calculates the error rate by performing
 	// the operation (5xx responses / all responses).
+	// It returns 0 if no request was made during the interval.
 	ErrorRate(ctx context.Context, offset time.Duration) (float64, error)
 }
 

@@ -82,6 +82,7 @@ func Diagnose(ctx context.Context, healthCriteria []config.Metric, actualValues 
 
 		// For unmet request count, return inconclusive and empty results.
 		if !isMet && criteria.Type == config.RequestCountMetricsCheck {
+			logger.Debug("unmet criterion")
 			diagnosis = Inconclusive
 			results = nil
 			break
