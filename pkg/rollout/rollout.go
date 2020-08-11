@@ -2,6 +2,7 @@ package rollout
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"time"
 
@@ -133,10 +134,7 @@ func (r *Rollout) UpdateService(svc *run.Service) (*run.Service, error) {
 		r.log.Debug("new candidate, assign some traffic")
 		svc = r.PrepareRollForward(svc, stable, candidate)
 		svc = r.updateAnnotations(svc, stable, candidate)
-
-		// TODO(gvso): create a setHealthReportAnnotation that appends the
-		// current time to the report before setting the annotation.
-		setAnnotation(svc, LastHealthReportAnnotation, "new candidate, no health report available yet")
+		r.setHealthReportAnnotation(svc, "new candidate, no health report available yet")
 
 		err := r.replaceService(svc)
 		return svc, errors.Wrap(err, "failed to replace service")
@@ -161,7 +159,7 @@ func (r *Rollout) UpdateService(svc *run.Service) (*run.Service, error) {
 
 	svc = r.updateAnnotations(svc, stable, candidate)
 	report := health.StringReport(r.strategy.HealthCriteria, diagnosis)
-	setAnnotation(svc, LastHealthReportAnnotation, report)
+	r.setHealthReportAnnotation(svc, report)
 
 	err = r.replaceService(svc)
 	return svc, errors.Wrap(err, "failed to replace service")
@@ -361,6 +359,13 @@ func setAnnotation(svc *run.Service, key, value string) {
 		svc.Metadata.Annotations = make(map[string]string)
 	}
 	svc.Metadata.Annotations[key] = value
+}
+
+// setHealthReportAnnotation appends the current time to the report and sets
+// the health report annotation.
+func (r *Rollout) setHealthReportAnnotation(svc *run.Service, report string) {
+	report += fmt.Sprintf("\nlastUpdate: %s", r.time.Now().Format(time.RFC3339))
+	setAnnotation(svc, LastHealthReportAnnotation, report)
 }
 
 // diagnoseCandidate returns the candidate's diagnosis based on metrics.
