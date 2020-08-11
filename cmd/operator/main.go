@@ -231,13 +231,9 @@ func printHealthCriteria(logger *logrus.Logger, healthCriteria []config.HealthCr
 			"threshold":   criteria.Threshold,
 		})
 
-		switch criteria.Metric {
-		case config.ErrorRateMetricsCheck:
-			lg.Debug("found health criterion")
-		case config.LatencyMetricsCheck:
-			lg.WithField("percentile", criteria.Percentile).Debug("found health criterion")
-		default:
-			lg.Debug("invalid health criterion")
+		if criteria.Metric == config.LatencyMetricsCheck {
+			lg = lg.WithField("percentile", criteria.Percentile)
 		}
+		lg.Debug("found health criterion")
 	}
 }
