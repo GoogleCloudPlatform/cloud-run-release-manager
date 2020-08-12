@@ -370,10 +370,10 @@ func (r *Rollout) setHealthReportAnnotation(svc *run.Service, report string) {
 
 // diagnoseCandidate returns the candidate's diagnosis based on metrics.
 func (r *Rollout) diagnoseCandidate(candidate string, healthCriteria []config.HealthCriterion) (d health.Diagnosis, err error) {
-	healthCheckOffset := time.Duration(r.strategy.HealthOffsetMinute) * time.Minute
 	r.log.Debug("collecting metrics from API")
 	ctx := util.ContextWithLogger(r.ctx, r.log)
 	r.metricsProvider.SetCandidateRevision(candidate)
+	healthCheckOffset := r.strategy.HealthCheckOffset
 	metricsValues, err := health.CollectMetrics(ctx, r.metricsProvider, healthCheckOffset, healthCriteria)
 	if err != nil {
 		return d, errors.Wrap(err, "failed to collect metrics")

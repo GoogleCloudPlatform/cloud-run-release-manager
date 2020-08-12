@@ -55,12 +55,12 @@ func (steps stepFlags) String() string {
 }
 
 var (
-	flLoggingLevel       string
-	flCLI                bool
-	flCLILoopIntervalSec int
-	flHTTPAddr           string
-	flProject            string
-	flLabelSelector      string
+	flLoggingLevel    string
+	flCLI             bool
+	flCLILoopInterval time.Duration
+	flHTTPAddr        string
+	flProject         string
+	flLabelSelector   string
 
 	// Empty array means all regions.
 	flRegions       []string
@@ -69,7 +69,7 @@ var (
 	// Rollout strategy-related flags.
 	flSteps              stepFlags
 	flStepsString        string
-	flHealthOffsetMinute int
+	flHealthOffset       time.Duration
 	flTimeBeweenRollouts time.Duration
 	flMinRequestCount    int
 	flErrorRate          float64
@@ -89,16 +89,16 @@ func init() {
 
 	flag.StringVar(&flLoggingLevel, "verbosity", "info", "the logging level (e.g. debug)")
 	flag.BoolVar(&flCLI, "cli", false, "run as CLI application to manage rollout in intervals")
-	flag.IntVar(&flCLILoopIntervalSec, "cli-run-interval", 60, "the time between each rollout process (in seconds)")
+	flag.DurationVar(&flCLILoopInterval, "cli-run-interval", 60*time.Second, "the time between each rollout process (in seconds)")
 	flag.StringVar(&flHTTPAddr, "http-addr", defaultAddr, "address where to listen to http requests (e.g. :8080)")
 	flag.StringVar(&flProject, "project", "", "project in which the service is deployed")
 	flag.StringVar(&flLabelSelector, "label", "rollout-strategy=gradual", "filter services based on a label (e.g. team=backend)")
 	flag.StringVar(&flRegionsString, "regions", "", "the Cloud Run regions where the services should be looked at")
 	flag.Var(&flSteps, "step", "a percentage in traffic the candidate should go through")
 	flag.StringVar(&flStepsString, "steps", "5,20,50,80", "define steps in one flag separated by commas (e.g. 5,30,60)")
-	flag.IntVar(&flHealthOffsetMinute, "healthcheck-offset", 30, "use metrics from the last N minutes relative to current rollout process")
+	flag.DurationVar(&flHealthOffset, "healthcheck-offset", 30*time.Minute, "time window to look back during health check to assess the candidate's health")
 	flag.DurationVar(&flTimeBeweenRollouts, "min-wait", 30*time.Minute, "minimum time to wait between rollout stages (in minutes), use 0 to disable")
-	flag.IntVar(&flMinRequestCount, "min-requests", 100, "expected minimum requests before determining candidate's health")
+	flag.IntVar(&flMinRequestCount, "min-requests", 100, "expected minimum requests (in time window given by -healthcheck-offset) needed to determine candidate's health")
 	flag.Float64Var(&flErrorRate, "max-error-rate", 1.0, "expected max server error rate (in percent)")
 	flag.Float64Var(&flLatencyP99, "latency-p99", 0, "expected max latency for 99th percentile of requests (set 0 to ignore)")
 	flag.Float64Var(&flLatencyP95, "latency-p95", 0, "expected max latency for 95th percentile of requests (set 0 to ignore)")
@@ -129,8 +129,7 @@ func main() {
 		)
 	}
 
-	valid, err := flagsAreValid()
-	if !valid {
+	if err := validateFlags(); err != nil {
 		logger.Fatalf("invalid flags: %v", err)
 	}
 
@@ -138,7 +137,7 @@ func main() {
 	target := config.NewTarget(flProject, flRegions, flLabelSelector)
 	healthCriteria := healthCriteriaFromFlags(flMinRequestCount, flErrorRate, flLatencyP99, flLatencyP95, flLatencyP50)
 	printHealthCriteria(logger, healthCriteria)
-	strategy := config.NewStrategy(target, flSteps, flHealthOffsetMinute, flTimeBeweenRollouts, healthCriteria)
+	strategy := config.NewStrategy(target, flSteps, flHealthOffset, flTimeBeweenRollouts, healthCriteria)
 	cfg := &config.Config{Strategies: []config.Strategy{strategy}}
 	if err := cfg.Validate(); err != nil {
 		logger.Fatalf("invalid rollout configuration: %v", err)
@@ -163,12 +162,11 @@ func runDaemon(ctx context.Context, logger *logrus.Logger, cfg *config.Config) {
 			logger.Warnf("there were %d errors: \n%s", len(errs), errsStr)
 		}
 
-		duration := time.Duration(flCLILoopIntervalSec)
-		time.Sleep(duration * time.Second)
+		time.Sleep(flCLILoopInterval)
 	}
 }
 
-func flagsAreValid() (bool, error) {
+func validateFlags() error {
 	// -steps flag has precedence over the list of -step flags.
 	if flStepsString != "" {
 		steps := strings.Split(flStepsString, ",")
@@ -176,7 +174,7 @@ func flagsAreValid() (bool, error) {
 		for _, step := range steps {
 			value, err := strconv.ParseInt(step, 10, 64)
 			if err != nil {
-				return false, errors.Wrap(err, "invalid step value")
+				return errors.Wrapf(err, "invalid step value %v", value)
 			}
 
 			flSteps = append(flSteps, value)
@@ -185,11 +183,14 @@ func flagsAreValid() (bool, error) {
 
 	for _, region := range flRegions {
 		if region == "" {
-			return false, errors.New("region cannot be empty")
+			return errors.New("regions cannot be empty")
 		}
 	}
 
-	return true, nil
+	if flCLILoopInterval < 0 {
+		return errors.Errorf("cli run interval cannot be negative, got %s", flCLILoopInterval)
+	}
+	return nil
 }
 
 // chooseMetricsProvider checks the CLI flags and determine which metrics

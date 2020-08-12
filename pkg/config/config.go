@@ -44,7 +44,7 @@ type Strategy struct {
 	Target              Target
 	Steps               []int64
 	HealthCriteria      []HealthCriterion
-	HealthOffsetMinute  int
+	HealthCheckOffset   time.Duration
 	TimeBetweenRollouts time.Duration
 }
 
@@ -63,12 +63,12 @@ func NewTarget(project string, regions []string, labelSelector string) Target {
 }
 
 // NewStrategy initializes a strategy.
-func NewStrategy(target Target, steps []int64, healthOffset int, timeBetweenRollouts time.Duration, healthCriteria []HealthCriterion) Strategy {
+func NewStrategy(target Target, steps []int64, healthOffset, timeBetweenRollouts time.Duration, healthCriteria []HealthCriterion) Strategy {
 	return Strategy{
 		Target:              target,
 		Steps:               steps,
 		HealthCriteria:      healthCriteria,
-		HealthOffsetMinute:  healthOffset,
+		HealthCheckOffset:   healthOffset,
 		TimeBetweenRollouts: timeBetweenRollouts,
 	}
 }
@@ -86,8 +86,8 @@ func (config Config) Validate() error {
 
 // Validate checks if the strategy is valid.
 func (strategy Strategy) Validate() error {
-	if strategy.HealthOffsetMinute <= 0 {
-		return errors.Errorf("health check offset must be positive, got %d", strategy.HealthOffsetMinute)
+	if strategy.HealthCheckOffset <= 0 {
+		return errors.Errorf("health check offset must be positive, got %d", strategy.HealthCheckOffset)
 	}
 
 	if len(strategy.Steps) == 0 {

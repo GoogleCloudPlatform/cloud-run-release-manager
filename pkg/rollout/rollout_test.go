@@ -61,7 +61,7 @@ func TestUpdateService(t *testing.T) {
 	metricsMock.SetCandidateRevisionFn = func(revisionName string) {}
 	strategy := config.Strategy{
 		Steps:               []int64{10, 40, 70},
-		HealthOffsetMinute:  5,
+		HealthCheckOffset:   5 * time.Minute,
 		TimeBetweenRollouts: 10 * time.Minute,
 	}
 

@@ -188,12 +188,13 @@ available Cloud Run regions](https://cloud.google.com/run/docs/locations))
 
 The rollout strategy consists of the steps and health criteria.
 
-- `-cli-run-interval`: The time between each health check, in seconds (default:
-`60`). This is only need it if running with `-cli` option.
-- `-healthcheck-offset`: To evaluate the candidate's health, use metrics from
-the last `N` minutes relative to current rollout process (default: `30`)
+- `-cli-run-interval`: The time between each health check (default: `60s`). This
+is only need it if running with `-cli` option.
+- `-healthcheck-offset`: Time window to look back during health check to assess
+the candidate revision's health (default: `30m`).
 - `-min-requests`: The minimum number of requests needed to determine the
-candidate's health (default: `100`)
+candidate's health (default: `100`). This minimum value is expected in the time
+window determined by `-healthcheck-offset`
 - `-min-wait`: The minimum time before rolling out further (default: `30m`)
 - `-steps`: Percentages of traffic the candidate should go through (default:
 `5,20,50,80`)

@@ -13,7 +13,7 @@ func TestStrategy_Validate(t *testing.T) {
 		name                string
 		target              config.Target
 		steps               []int64
-		healthOffset        int
+		healthOffset        time.Duration
 		timeBetweenRollouts time.Duration
 		healthCriteria      []config.HealthCriterion
 		shouldErr           bool
@@ -22,7 +22,7 @@ func TestStrategy_Validate(t *testing.T) {
 			name:                "correct config with label selector",
 			target:              config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
 			steps:               []int64{5, 30, 60},
-			healthOffset:        20,
+			healthOffset:        10 * time.Minute,
 			timeBetweenRollouts: 10 * time.Minute,
 			healthCriteria: []config.HealthCriterion{
 				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
@@ -34,7 +34,7 @@ func TestStrategy_Validate(t *testing.T) {
 			name:                "missing project",
 			target:              config.NewTarget("", []string{"us-east1", "us-west1"}, "team=backend"),
 			steps:               []int64{5, 30, 60},
-			healthOffset:        20,
+			healthOffset:        10 * time.Minute,
 			timeBetweenRollouts: 10 * time.Minute,
 			healthCriteria:      nil,
 			shouldErr:           true,
@@ -43,7 +43,7 @@ func TestStrategy_Validate(t *testing.T) {
 			name:                "missing steps",
 			target:              config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
 			steps:               []int64{},
-			healthOffset:        20,
+			healthOffset:        10 * time.Minute,
 			timeBetweenRollouts: 10 * time.Minute,
 			shouldErr:           true,
 		},
@@ -51,7 +51,7 @@ func TestStrategy_Validate(t *testing.T) {
 			name:                "steps not in order",
 			target:              config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
 			steps:               []int64{30, 30, 60},
-			healthOffset:        20,
+			healthOffset:        10 * time.Minute,
 			timeBetweenRollouts: 10 * time.Minute,
 			shouldErr:           true,
 		},
