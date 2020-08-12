@@ -26,7 +26,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics/sheets"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/stackdriver"
+	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics/stackdriver"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/config"
 	sdlog "github.com/TV4/logrus-stackdriver-formatter"
 	isatty "github.com/mattn/go-isatty"
