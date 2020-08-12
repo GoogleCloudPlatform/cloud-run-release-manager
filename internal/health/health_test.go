@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/config"
+	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/health"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics"
 	metricsMocker "github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics/mock"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/config"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/health"
 	"github.com/stretchr/testify/assert"
 )
 

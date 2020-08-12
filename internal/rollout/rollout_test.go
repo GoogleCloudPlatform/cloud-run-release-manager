@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/config"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics"
 	metricsMocker "github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics/mock"
+	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/rollout"
 	runMocker "github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/run/mock"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/config"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/rollout"
 	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"

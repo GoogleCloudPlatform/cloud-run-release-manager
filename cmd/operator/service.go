@@ -4,10 +4,10 @@ import (
 	"context"
 	"sync"
 
+	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/config"
+	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/rollout"
 	runapi "github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/run"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/util"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/config"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/rollout"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/api/run/v1"

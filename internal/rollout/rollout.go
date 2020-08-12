@@ -6,11 +6,11 @@ import (
 	"io/ioutil"
 	"time"
 
+	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/config"
+	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/health"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics"
 	runapi "github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/run"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/util"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/config"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/pkg/health"
 	"github.com/jonboulle/clockwork"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
