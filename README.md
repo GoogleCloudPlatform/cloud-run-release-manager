@@ -132,12 +132,16 @@ To set up this on Cloud Run, run the following steps on your shell:
          --role=roles/monitoring.viewer
     ```
 
-1. (Optional) Mirror the docker image to your GCP project.
+1. Build and push the container image for Release Manager to Google container
+   Registry.
 
     ```sh
-    docker pull gcr.io/ahmetb-demo/cloud-run-release-manager
-    docker tag gcr.io/$PROJECT_ID/cloud-run-release-manager
-    docker push gcr.io/$PROJECT_ID/cloud-run-release-manager
+    git clone https://github.com/GoogleCloudPlatform/cloud-run-release-manager.git
+    ```
+
+    ```sh
+    gcloud builds submit ./cloud-run-release-manager \
+        -t gcr.io/$PROJECT_ID/cloud-run-release-manager
     ```
 
 1. Deploy the Release Manager as a Cloud Run service:
@@ -148,7 +152,7 @@ To set up this on Cloud Run, run the following steps on your shell:
         --region=us-central1 \
         --image=gcr.io/$PROJECT_ID/cloud-run-release-manager \
         --service-account=release-manager@${PROJECT_ID}.iam.gserviceaccount.com \
-        --args=-project=$PROJECT_ID
+        --args=-project=$PROJECT_ID --args=-verbosity=debug
     ```
 
 1. Find the URL of your Cloud Run service and set as `URL` variable:
