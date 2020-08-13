@@ -107,16 +107,29 @@ To set up this on Cloud Run, run the following steps on your shell:
         --display-name "Cloud Run Release Manager"
     ```
 
-    And give it permissions to manage your services on the Cloud Run API, to use
-    other service accounts as their identity when updating Cloud Run services,
-    and to access metrics on your services:
+    Give it permissions to manage your services on the Cloud Run API:
 
     ```sh
     gcloud projects add-iam-policy-binding $PROJECT_ID \
         --member=serviceAccount:release-manager@${PROJECT_ID}.iam.gserviceaccount.com \
-        --role=roles/run.admin \
-        --role=roles/iam.serviceAccountUser \
-        --role=roles/monitoring.viewer
+        --role=roles/run.admin
+    ```
+
+    Also, give it permissions to use other service accounts as its identity when
+    updating Cloud Run services:
+
+    ```sh
+    gcloud projects add-iam-policy-binding $PROJECT_ID \
+        --member=serviceAccount:release-manager@${PROJECT_ID}.iam.gserviceaccount.com \
+        --role=roles/iam.serviceAccountUser
+    ```
+
+    Finally, give it access to metrics on your services:
+
+    ```sh
+    gcloud projects add-iam-policy-binding $PROJECT_ID \
+        --member=serviceAccount:release-manager@${PROJECT_ID}.iam.gserviceaccount.com \
+         --role=roles/monitoring.viewer
     ```
 
 1. (Optional) Mirror the docker image to your GCP project.
