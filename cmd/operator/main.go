@@ -142,6 +142,7 @@ func main() {
 	if err := validateFlags(); err != nil {
 		logger.Fatalf("invalid flags: %v", err)
 	}
+	logger.Debug(flagsToString())
 
 	// Configuration.
 	target := config.NewTarget(flProject, flRegions, flLabelSelector)
@@ -201,6 +202,46 @@ func validateFlags() error {
 		return errors.Errorf("cli run interval cannot be negative, got %s", flCLILoopInterval)
 	}
 	return nil
+}
+
+func flagsToString() string {
+	var str string
+	if flCLI {
+		str += fmt.Sprintf("-cli=%t\n-cli-interval-run=%s\n", flCLI, flCLILoopInterval)
+	} else {
+		str += fmt.Sprintf("-http-addr=%s\n", flHTTPAddr)
+	}
+
+	regionsStr := "all"
+	if len(flRegions) != 0 {
+		regionsStr = fmt.Sprintf("%v", flRegions)
+	}
+
+	str += fmt.Sprintf("-project=%s\n"+
+		"-label=%s\n"+
+		"-regions=%s\n"+
+		"-steps=%s\n"+
+		"-healthcheck-offset=%s\n"+
+		"-min-wait=%s\n"+
+		"-min-requests=%d\n"+
+		"-max-error-rate=%.2f\n"+
+		"-latency-p99=%.2f\n"+
+		"-latency-p95=%.2f\n"+
+		"-latency-p50=%.2f\n",
+		flProject,
+		flLabelSelector,
+		regionsStr,
+		flSteps,
+		flHealthOffset,
+		flTimeBeweenRollouts,
+		flMinRequestCount,
+		flErrorRate,
+		flLatencyP99,
+		flLatencyP95,
+		flLatencyP50,
+	)
+
+	return str
 }
 
 // healthCriteriaFromFlags checks the metrics-related flags and return an array
