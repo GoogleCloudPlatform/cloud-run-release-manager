@@ -73,11 +73,14 @@ func Diagnose(ctx context.Context, healthCriteria []config.HealthCriterion, actu
 	for i, value := range actualValues {
 		criteria := healthCriteria[i]
 		logger := logger.WithFields(logrus.Fields{
-			"metrics":     criteria.Metric,
-			"percentile":  criteria.Percentile,
-			"threshold":   criteria.Threshold,
-			"actualValue": value,
+			"metrics":       criteria.Metric,
+			"threshold":     criteria.Threshold,
+			"expectedValue": value,
 		})
+		if criteria.Metric == config.LatencyMetricsCheck {
+			logger = logger.WithField("percentile", criteria.Percentile)
+		}
+
 		isMet := isCriteriaMet(criteria.Metric, criteria.Threshold, value)
 
 		// For unmet request count, return inconclusive and empty results.
