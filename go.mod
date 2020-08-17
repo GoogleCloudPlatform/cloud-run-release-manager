@@ -1,4 +1,4 @@
-module github.com/GoogleCloudPlatform/cloud-run-release-operator
+module github.com/GoogleCloudPlatform/cloud-run-release-manager
 
 go 1.14
 

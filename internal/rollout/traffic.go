@@ -3,7 +3,7 @@ package rollout
 import (
 	"time"
 
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/health"
+	"github.com/GoogleCloudPlatform/cloud-run-release-manager/internal/health"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/api/run/v1"

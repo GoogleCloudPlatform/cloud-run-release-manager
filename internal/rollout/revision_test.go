@@ -3,7 +3,7 @@ package rollout_test
 import (
 	"testing"
 
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/rollout"
+	"github.com/GoogleCloudPlatform/cloud-run-release-manager/internal/rollout"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/api/run/v1"
 )

@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/compute/metadata"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/config"
+	"github.com/GoogleCloudPlatform/cloud-run-release-manager/internal/config"
 	sdlog "github.com/TV4/logrus-stackdriver-formatter"
 	isatty "github.com/mattn/go-isatty"
 	"github.com/pkg/errors"
@@ -122,7 +122,7 @@ func main() {
 	if !isatty.IsTerminal(os.Stdout.Fd()) {
 		serviceName := os.Getenv("K_SERVICE")
 		if serviceName == "" {
-			serviceName = "cloud-run-release-operator"
+			serviceName = "cloud-run-release-manager"
 		}
 		logger.Formatter = sdlog.NewFormatter(
 			sdlog.WithService(serviceName),

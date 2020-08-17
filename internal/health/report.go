@@ -3,7 +3,7 @@ package health
 import (
 	"fmt"
 
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/config"
+	"github.com/GoogleCloudPlatform/cloud-run-release-manager/internal/config"
 )
 
 // StringReport returns a human-readable report of the diagnosis.

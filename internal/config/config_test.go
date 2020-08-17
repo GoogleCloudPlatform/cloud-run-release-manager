@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/config"
+	"github.com/GoogleCloudPlatform/cloud-run-release-manager/internal/config"
 	"github.com/stretchr/testify/assert"
 )
 

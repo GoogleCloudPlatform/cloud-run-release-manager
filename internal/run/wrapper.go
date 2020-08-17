@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/util"
+	"github.com/GoogleCloudPlatform/cloud-run-release-manager/internal/util"
 	"github.com/pkg/errors"
 	"google.golang.org/api/option"
 	"google.golang.org/api/run/v1"

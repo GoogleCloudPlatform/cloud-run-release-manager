@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/util"
+	"github.com/GoogleCloudPlatform/cloud-run-release-manager/internal/metrics"
+	"github.com/GoogleCloudPlatform/cloud-run-release-manager/internal/util"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 

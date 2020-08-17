@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/util"
+	"github.com/GoogleCloudPlatform/cloud-run-release-manager/internal/util"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )

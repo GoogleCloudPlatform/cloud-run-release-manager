@@ -3,7 +3,7 @@ package health
 import (
 	"testing"
 
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/config"
+	"github.com/GoogleCloudPlatform/cloud-run-release-manager/internal/config"
 	"github.com/stretchr/testify/assert"
 )
 

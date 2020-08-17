@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics"
+	"github.com/GoogleCloudPlatform/cloud-run-release-manager/internal/metrics"
 )
 
 // Metrics is a mock implementation of metrics.Metrics.

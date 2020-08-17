@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/config"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics/sheets"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics/stackdriver"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/rollout"
-	runapi "github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/run"
+	"github.com/GoogleCloudPlatform/cloud-run-release-manager/internal/config"
+	"github.com/GoogleCloudPlatform/cloud-run-release-manager/internal/metrics"
+	"github.com/GoogleCloudPlatform/cloud-run-release-manager/internal/metrics/sheets"
+	"github.com/GoogleCloudPlatform/cloud-run-release-manager/internal/metrics/stackdriver"
+	"github.com/GoogleCloudPlatform/cloud-run-release-manager/internal/rollout"
+	runapi "github.com/GoogleCloudPlatform/cloud-run-release-manager/internal/run"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )

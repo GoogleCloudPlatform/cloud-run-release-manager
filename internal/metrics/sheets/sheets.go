@@ -15,8 +15,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/util"
+	"github.com/GoogleCloudPlatform/cloud-run-release-manager/internal/metrics"
+	"github.com/GoogleCloudPlatform/cloud-run-release-manager/internal/util"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/api/sheets/v4"
