@@ -6,6 +6,9 @@ import (
 	"sync"
 
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/config"
+	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics"
+	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics/sheets"
+	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics/stackdriver"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/rollout"
 	runapi "github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/run"
 	"github.com/pkg/errors"
@@ -87,4 +90,15 @@ func rolloutErrsToString(errs []error) (errsStr string) {
 		errsStr += fmt.Sprintf("[error#%d] %v", i, err)
 	}
 	return errsStr
+}
+
+// chooseMetricsProvider checks the CLI flags and determine which metrics
+// provider should be used for the rollout.
+func chooseMetricsProvider(ctx context.Context, logger *logrus.Entry, project, region, svcName string) (metrics.Provider, error) {
+	if flGoogleSheetsID != "" {
+		logger.Debug("using Google Sheets as metrics provider")
+		return sheets.NewProvider(ctx, flGoogleSheetsID, "", region, svcName)
+	}
+	logger.Debug("using Cloud Monitoring (Stackdriver) as metrics provider")
+	return stackdriver.NewProvider(ctx, project, region, svcName)
 }

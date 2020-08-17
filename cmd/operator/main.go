@@ -28,9 +28,6 @@ import (
 
 	"cloud.google.com/go/compute/metadata"
 	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/config"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics/sheets"
-	"github.com/GoogleCloudPlatform/cloud-run-release-operator/internal/metrics/stackdriver"
 	sdlog "github.com/TV4/logrus-stackdriver-formatter"
 	isatty "github.com/mattn/go-isatty"
 	"github.com/pkg/errors"
@@ -204,17 +201,6 @@ func validateFlags() error {
 		return errors.Errorf("cli run interval cannot be negative, got %s", flCLILoopInterval)
 	}
 	return nil
-}
-
-// chooseMetricsProvider checks the CLI flags and determine which metrics
-// provider should be used for the rollout.
-func chooseMetricsProvider(ctx context.Context, logger *logrus.Entry, project, region, svcName string) (metrics.Provider, error) {
-	if flGoogleSheetsID != "" {
-		logger.Debug("using Google Sheets as metrics provider")
-		return sheets.NewProvider(ctx, flGoogleSheetsID, "", region, svcName)
-	}
-	logger.Debug("using Cloud Monitoring (Stackdriver) as metrics provider")
-	return stackdriver.NewProvider(ctx, project, region, svcName)
 }
 
 // healthCriteriaFromFlags checks the metrics-related flags and return an array
