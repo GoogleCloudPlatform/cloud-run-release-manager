@@ -118,13 +118,13 @@ func (r *Rollout) Rollout() (bool, error) {
 func (r *Rollout) UpdateService(svc *run.Service) (*run.Service, error) {
 	stable := DetectStableRevisionName(svc)
 	if stable == "" {
-		r.log.Info("could not determine stable revision")
+		r.log.Info("cannot find a stable revision (that gets 100% of the traffic)")
 		return nil, nil
 	}
 
 	candidate := DetectCandidateRevisionName(svc, stable)
 	if candidate == "" {
-		r.log.Info("could not determine candidate revision")
+		r.log.Debug("currently no candidate revision exists to rollout")
 		return nil, nil
 	}
 	r.log = r.log.WithFields(logrus.Fields{"stable": stable, "candidate": candidate})
