@@ -106,6 +106,11 @@ func init() {
 	flag.StringVar(&flGoogleSheetsID, "google-sheets", "", "ID of public Google sheets document to use as metrics provider")
 	flag.Parse()
 
+	args := flag.Args()
+	if len(args) != 0 {
+		logrus.Fatalf("positional arguments not accepted: %v", args)
+	}
+
 	if flRegionsString != "" {
 		flRegions = strings.Split(flRegionsString, ",")
 	}
