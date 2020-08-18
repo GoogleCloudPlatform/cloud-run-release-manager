@@ -74,8 +74,8 @@ func Diagnose(ctx context.Context, healthCriteria []config.HealthCriterion, actu
 		criteria := healthCriteria[i]
 		logger := logger.WithFields(logrus.Fields{
 			"metrics":       criteria.Metric,
-			"threshold":     criteria.Threshold,
-			"expectedValue": value,
+			"expectedValue": criteria.Threshold,
+			"actualValue":   value,
 		})
 		if criteria.Metric == config.LatencyMetricsCheck {
 			logger = logger.WithField("percentile", criteria.Percentile)
