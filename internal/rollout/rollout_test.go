@@ -76,8 +76,8 @@ func TestUpdateService(t *testing.T) {
 		healthCriteria []config.HealthCriterion
 		outAnnotations map[string]string
 		outTraffic     []*run.TrafficTarget
+		changedTraffic bool
 		shouldErr      bool
-		nilService     bool
 	}{
 		{
 			name: "stable revision based on traffic share",
@@ -103,6 +103,7 @@ func TestUpdateService(t *testing.T) {
 				{RevisionName: "test-003", Percent: strategy.Steps[0], Tag: rollout.CandidateTag},
 				{LatestRevision: true, Tag: rollout.LatestTag},
 			},
+			changedTraffic: true,
 		},
 		{
 			name: "no stable revision",
@@ -110,16 +111,16 @@ func TestUpdateService(t *testing.T) {
 				{RevisionName: "test-002", Percent: 50},
 				{RevisionName: "test-001", Percent: 50},
 			},
-			lastReady:  "test-002",
-			nilService: true,
+			lastReady:      "test-002",
+			changedTraffic: false,
 		},
 		{
 			name: "same stable and latest revision",
 			traffic: []*run.TrafficTarget{
 				{RevisionName: "test-001", Percent: 100},
 			},
-			lastReady:  "test-001",
-			nilService: true,
+			lastReady:      "test-001",
+			changedTraffic: false,
 		},
 		{
 			name: "new candidate and non-existing previous candidate",
@@ -140,6 +141,7 @@ func TestUpdateService(t *testing.T) {
 				{RevisionName: "test-002", Percent: strategy.Steps[0], Tag: rollout.CandidateTag},
 				{LatestRevision: true, Tag: rollout.LatestTag},
 			},
+			changedTraffic: true,
 		},
 		{
 			name: "keep rolling out the same candidate",
@@ -171,6 +173,7 @@ func TestUpdateService(t *testing.T) {
 				{RevisionName: "test-002", Percent: strategy.Steps[2], Tag: rollout.CandidateTag},
 				{LatestRevision: true, Tag: rollout.LatestTag},
 			},
+			changedTraffic: true,
 		},
 		{
 			name: "healthy but not enough time has elapsed, do not roll forward",
@@ -187,17 +190,7 @@ func TestUpdateService(t *testing.T) {
 				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
 				{Metric: config.ErrorRateMetricsCheck, Threshold: 5},
 			},
-			outAnnotations: map[string]string{
-				rollout.StableRevisionAnnotation:    "test-001",
-				rollout.CandidateRevisionAnnotation: "test-002",
-				rollout.LastRolloutAnnotation:       makeLastRolloutAnnotation(clockMock, 0),
-			},
-			outTraffic: []*run.TrafficTarget{
-				{RevisionName: "test-001", Percent: 100 - strategy.Steps[2], Tag: rollout.StableTag},
-				{RevisionName: "test-002", Percent: strategy.Steps[2], Tag: rollout.CandidateTag},
-				{LatestRevision: true, Tag: rollout.LatestTag},
-			},
-			nilService: true,
+			changedTraffic: false,
 		},
 		{
 			name: "different candidate, restart rollout",
@@ -219,6 +212,7 @@ func TestUpdateService(t *testing.T) {
 				{RevisionName: "test-003", Percent: strategy.Steps[0], Tag: rollout.CandidateTag},
 				{LatestRevision: true, Tag: rollout.LatestTag},
 			},
+			changedTraffic: true,
 		},
 		{
 			name: "candidate is ready to become stable",
@@ -247,6 +241,7 @@ func TestUpdateService(t *testing.T) {
 				{RevisionName: "test-002", Percent: 100, Tag: rollout.StableTag},
 				{LatestRevision: true, Tag: rollout.LatestTag},
 			},
+			changedTraffic: true,
 		},
 		{
 			name: "unhealthy candidate, rollback",
@@ -275,6 +270,7 @@ func TestUpdateService(t *testing.T) {
 				{RevisionName: "test-002", Percent: 0, Tag: rollout.CandidateTag},
 				{LatestRevision: true, Tag: rollout.LatestTag},
 			},
+			changedTraffic: true,
 		},
 		{
 			name: "latest ready is a failed candidate",
@@ -285,8 +281,8 @@ func TestUpdateService(t *testing.T) {
 				{RevisionName: "test-001", Percent: 100},
 				{LatestRevision: true, Tag: rollout.LatestTag},
 			},
-			lastReady:  "test-002",
-			nilService: true,
+			lastReady:      "test-002",
+			changedTraffic: false,
 		},
 		{
 			name: "inconclusive diagnosis",
@@ -299,7 +295,7 @@ func TestUpdateService(t *testing.T) {
 				{Metric: config.RequestCountMetricsCheck, Threshold: 1500},
 				{Metric: config.ErrorRateMetricsCheck, Threshold: 0.95},
 			},
-			nilService: true,
+			changedTraffic: false,
 		},
 		{
 			name: "unknown diagnosis",
@@ -335,11 +331,11 @@ func TestUpdateService(t *testing.T) {
 		r := rollout.New(context.TODO(), metricsMock, svcRecord, strategy).WithClient(runclient).WithLogger(lg).WithClock(clockMock)
 
 		t.Run(test.name, func(tt *testing.T) {
-			svc, err := r.UpdateService(svc)
+			svc, changedTraffic, err := r.UpdateService(svc)
 			if test.shouldErr {
 				assert.NotNil(tt, err)
-			} else if test.nilService {
-				assert.Nil(tt, svc)
+			} else if !test.changedTraffic {
+				assert.False(tt, changedTraffic)
 			} else {
 				assert.Equal(tt, test.outAnnotations, svc.Metadata.Annotations)
 				assert.Equal(tt, test.outTraffic, svc.Spec.Traffic)

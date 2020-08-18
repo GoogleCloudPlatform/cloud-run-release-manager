@@ -11,30 +11,30 @@ import (
 
 // determineTraffic returns a traffic configuration based on the diagnosis.
 // If traffic should not changed, nil is returned.
-func (r *Rollout) determineTraffic(svc *run.Service, diagnosis health.DiagnosisResult, stable, candidate string) ([]*run.TrafficTarget, error) {
+func (r *Rollout) determineTraffic(svc *run.Service, diagnosis health.DiagnosisResult, stable, candidate string) ([]*run.TrafficTarget, bool, error) {
 	switch diagnosis {
 	case health.Inconclusive:
 		r.log.Debug("health check inconclusive")
-		return nil, nil
+		return svc.Spec.Traffic, false, nil
 	case health.Healthy:
 		r.log.Debug("healthy candidate")
 		lastRollout := svc.Metadata.Annotations[LastRolloutAnnotation]
 		enoughTime, err := r.hasEnoughTimeElapsed(lastRollout, r.strategy.TimeBetweenRollouts)
 		if err != nil {
-			return nil, errors.Wrap(err, "error while determining if enough time elapsed")
+			return nil, false, errors.Wrap(err, "error while determining if enough time elapsed")
 		}
 		if !enoughTime {
 			r.log.WithField("lastRollout", lastRollout).Debug("no enough time elapsed since last roll out")
-			return nil, nil
+			return svc.Spec.Traffic, false, nil
 		}
 		r.log.Info("rolling forward")
-		return r.rollForwardTraffic(svc.Spec.Traffic, stable, candidate), nil
+		return r.rollForwardTraffic(svc.Spec.Traffic, stable, candidate), true, nil
 	case health.Unhealthy:
 		r.log.Info("unhealthy candidate, rollback")
 		r.shouldRollback = true
-		return r.rollbackTraffic(svc.Spec.Traffic, stable, candidate), nil
+		return r.rollbackTraffic(svc.Spec.Traffic, stable, candidate), true, nil
 	default:
-		return nil, errors.Errorf("invalid candidate's health diagnosis %v", diagnosis)
+		return nil, false, errors.Errorf("invalid candidate's health diagnosis %v", diagnosis)
 	}
 }
 

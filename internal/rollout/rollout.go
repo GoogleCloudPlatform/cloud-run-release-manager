@@ -104,28 +104,33 @@ func (r *Rollout) Rollout() (bool, error) {
 		"region":  r.region,
 	})
 
-	svc, err := r.UpdateService(r.service)
+	_, trafficChanged, err := r.UpdateService(r.service)
 	if err != nil {
 		return false, errors.Wrapf(err, "failed to perform rollout")
 	}
 
 	// Service is non-nil only when the replacement of the service succeded.
-	return (svc != nil), nil
+	return trafficChanged, nil
 }
 
 // UpdateService changes the traffic configuration for the revisions and update
 // the service.
-func (r *Rollout) UpdateService(svc *run.Service) (*run.Service, error) {
+//
+// If successful, it always returns an updated service object (with changes in
+// the traffic and/or annotations) or an unchanged service object if no stable
+// or candidate revision was found.
+// If the traffic configuration changed, the second return value is set to true.
+func (r *Rollout) UpdateService(svc *run.Service) (*run.Service, bool, error) {
 	stable := DetectStableRevisionName(svc)
 	if stable == "" {
 		r.log.Info("cannot find a stable revision (that gets 100% of the traffic)")
-		return nil, nil
+		return svc, false, nil
 	}
 
 	candidate := DetectCandidateRevisionName(svc, stable)
 	if candidate == "" {
 		r.log.Debug("currently no candidate revision exists to rollout")
-		return nil, nil
+		return svc, false, nil
 	}
 	r.log = r.log.WithFields(logrus.Fields{"stable": stable, "candidate": candidate})
 
@@ -137,24 +142,22 @@ func (r *Rollout) UpdateService(svc *run.Service) (*run.Service, error) {
 		r.setHealthReportAnnotation(svc, "new candidate, no health report available yet")
 
 		err := r.replaceService(svc)
-		return svc, errors.Wrap(err, "failed to replace service")
+		return svc, false, errors.Wrap(err, "failed to replace service")
 	}
 
 	diagnosis, err := r.diagnoseCandidate(candidate, r.strategy.HealthCriteria)
 	if err != nil {
 		r.log.Error("could not diagnose candidate's health")
-		return nil, errors.Wrapf(err, "failed to diagnose health for candidate %q", candidate)
+		return svc, false, errors.Wrapf(err, "failed to diagnose health for candidate %q", candidate)
 	}
 
-	traffic, err := r.determineTraffic(svc, diagnosis.OverallResult, stable, candidate)
+	traffic, trafficChanged, err := r.determineTraffic(svc, diagnosis.OverallResult, stable, candidate)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to configure traffic after diagnosis")
+		return svc, false, errors.Wrap(err, "failed to configure traffic after diagnosis")
 	}
-	if traffic == nil {
-		// If traffic was unchanged, nil is returned.
-		// TODO(gvso): Do not return a nil service. Also update the annotations
-		// even if the traffic was unchanged.
-		return nil, nil
+	if !trafficChanged {
+		// TODO(gvso): Update the annotations even if the traffic was unchanged.
+		return svc, trafficChanged, nil
 	}
 
 	svc.Spec.Traffic = traffic
@@ -163,7 +166,7 @@ func (r *Rollout) UpdateService(svc *run.Service) (*run.Service, error) {
 	r.setHealthReportAnnotation(svc, report)
 
 	err = r.replaceService(svc)
-	return svc, errors.Wrap(err, "failed to replace service")
+	return svc, trafficChanged, errors.Wrap(err, "failed to replace service")
 }
 
 // replaceService updates the service object in Cloud Run.
