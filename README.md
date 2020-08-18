@@ -11,11 +11,31 @@ one.
 > You might encounter issues in production, since this project is currently in
 > **alpha**.
 
-Quick Links:
+## Table of Contents
 
-* [How does it work](#how-does-it-work)
-* [Set it up on Cloud Run](#setup)
-* [Try it out (locally)](#try-out)
+<!--
+  ⚠️ DO NOT UPDATE THE TABLE OF CONTENTS MANUALLY ️️⚠️
+  run `npx markdown-toc -i README.md`.
+
+  Please stick to 80-character line wraps as much as you can.
+-->
+
+<!-- toc -->
+
+- [How does it work?](#how-does-it-work)
+  * [Examples](#examples)
+    + [Scenario 1: Automated Rollouts](#scenario-1-automated-rollouts)
+    + [Scenario 2: Automated Rollbacks](#scenario-2-automated-rollbacks)
+- [Try it out (locally)](#try-it-out-locally)
+- [Setup](#setup)
+- [Configuration](#configuration)
+  * [Choosing services](#choosing-services)
+  * [Rollout strategy](#rollout-strategy)
+- [Observability & Troubleshooting](#observability--troubleshooting)
+  * [What's happening with my rollout?](#whats-happening-with-my-rollout)
+  * [Release Manager logs](#release-manager-logs)
+
+<!-- tocstop -->
 
 ## How does it work?
 
@@ -61,7 +81,7 @@ to **v1**
 
 ![Rollout stages](assets/rollback-stages.svg "Rollout stages from v1 to v2")
 
-## Try it out (locally)  <a id="try-out"></a>
+## Try it out (locally)
 
 1. Check out this repository.
 1. Make sure you have Go compiler installed, run:
@@ -86,7 +106,7 @@ metrics for the past 30 minutes by default.
 - If metrics show a healthy candidate, traffic to candidate is increased
 - If metrics show an unhealthy candidate, a roll back is performed.
 
-## Setup <a id="setup"></a>
+## Setup
 
 Cloud Run Release Manager is distributed as a server deployed to
 Cloud Run, invoked periodically by [Cloud
@@ -152,7 +172,7 @@ To set up this on Cloud Run, run the following steps on your shell:
         --region=us-central1 \
         --image=gcr.io/$PROJECT_ID/cloud-run-release-manager \
         --service-account=release-manager@${PROJECT_ID}.iam.gserviceaccount.com \
-        --args=-project=$PROJECT_ID --args=-verbosity=debug
+        --args=-verbosity=debug
     ```
 
 1. Find the URL of your Cloud Run service and set as `URL` variable:
@@ -227,6 +247,74 @@ ignore (default: `0`)
 ignore (default: `0`)
 - `-latency-p50`: Expected maximum latency for 50th percentile of requests, 0 to
 ignore (default: `0`)
+
+## Observability & Troubleshooting
+
+### What's happening with my rollout?
+
+To check the status of your rollout, go to [Cloud
+Run](http://console.cloud.google.com/run) and click on your service.
+
+Under the `Revisions` section, you can see how the traffic is currently split
+between your stable and candidate revisions.
+
+For more detailed information, you can use the annotations automatically added
+by the Release Manager. To view the annotations, click on the `YAML` section:
+
+**Sample annotation:**
+
+```yaml
+rollout.cloud.run/stableRevision: hello-00040-opa
+rollout.cloud.run/candidateRevision: hello-00039-boc
+rollout.cloud.run/lastFailedCandidateRevision: hello-00032-doc
+rollout.cloud.run/lastRollout: '2020-08-13T15:35:10-04:00'
+rollout.cloud.run/lastHealthReport: |-
+  status: healthy
+  metrics:
+  - request-count: 150 (needs 100)
+  - error-rate-percent: 1.00 (needs 1.00)
+  - request-latency[p99]: 503.23 (needs 750.00)
+  lastUpdate: 2020-08-13T15:35:10-04:00
+```
+
+- `rollout.cloud.run/stableRevision` is the name of the current stable revision
+- `rollout.cloud.run/candidateRevision` is the revision name of the current
+  candidate
+- `rollout.cloud.run/lastFailedCandidateRevision` is the last revision that was
+  considered a candidate but failed to meet the health criteria at some point of
+  its rollout process
+- `rollout.cloud.run/lastRollout` contains the last time a rollout occurred
+  (traffic to the candidate was increased)
+- `rollout.cloud.run/lastHealthReport` contains information on why a rollout or
+  rollback occurred. It shows the results of the health assessment and the
+  actual values for each of the metrics
+
+### Release Manager logs
+
+You can quickly find out if there are errors when rolling out any of your
+services by querying for errors in the [Logs
+Viewer](https://console.cloud.google.com/logs)
+
+[Click to run the
+query](https://console.cloud.google.com/logs/viewer?advancedFilter=resource.type%20%3D%20%22cloud_run_revision%22%0Aresource.labels.service_name%20%3D%20%22release-manager%22%0Aresource.labels.location%20%3D%20%22us-central1%22%0Aseverity%20%3E%3D%20ERROR&interval=NO_LIMIT)
+
+```plain
+resource.type = "cloud_run_revision"
+resource.labels.service_name = "release-manager"
+resource.labels.location = "us-central1"
+severity >= ERROR
+```
+
+If you want to filter the errors for a specific service, you can include the
+service's name in the query:
+
+```plain
+jsonPayload.context.data.service = "<YOUR_SERVICE>"
+```
+
+You can also include a full list of the logs by changing the severity filter to
+`severity >= DEBUG`. You must have set the flag `-verbosity=debug` when
+deploying the Release Manager to have full logs about your rollouts.
 
 ---
 
