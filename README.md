@@ -27,6 +27,7 @@ one.
     + [Scenario 1: Automated Rollouts](#scenario-1-automated-rollouts)
     + [Scenario 2: Automated Rollbacks](#scenario-2-automated-rollbacks)
 - [Try it out (locally)](#try-it-out-locally)
+  * [Default rollout configuration](#default-rollout-configuration)
 - [Setup on GCP](#setup-on-gcp)
 - [Configuration](#configuration)
   * [Choosing services](#choosing-services)
@@ -127,18 +128,18 @@ When running the Release Manager, default configuration values are used. The
 most relevant values are:
 
 - `-healthcheck-offset=30m`: When assessing the candidate's health, the Release
-  Manager will get metrics about the candidate revision from the last 30
-  minutes
-- `-min-requests=100`: The Release Manager expects `100` requests in the past 30
-  minutes (given by `healthcheck-offset`). If no enough requests were made in
-  that interval, no rollout or rollback is performed even if the other metrics
-  show a healthy/unhealthy candidate
-- `-max-error-rate=1`: By default, the only health criteria is a expected max
-  server error rate of 1%
-- `-min-wait=30m`: If the candidate revision got the minimum number of requests
-  and was healthy, it can be rolled out further only if 30 minutes since last
-  roll out has elapsed. If the candidate was unhealthy, however, it is rolled
-  back independent of the elapsed time since last rollout.
+  Manager will get metrics about the candidate revision from the last 30 minutes
+- `-min-requests=0`: The Release Manager expects this number of requests in the
+  past 30 minutes (given by `healthcheck-offset`). If no enough requests were
+  made in that interval, no rollout or rollback is performed even if the other
+  metrics show a healthy/unhealthy candidate. The default value of `0` means
+  that the number of requests should be ignored when the Release Manager makes
+  a decission about rolling out/back.
+- `-max-error-rate=1` (in percent): By default, the only health criteria is a
+  expected max server error rate of 1%
+- `-min-wait=30m`: If the candidate revision is healthy, it can be rolled out
+  further only if 30 minutes since last roll out has elapsed. If the candidate
+  was unhealthy, however, it is rolled back independent of the elapsed time.
 
 The configuration values can be changed as described in the
 [configuration section](#configuration).
@@ -210,8 +211,15 @@ shell:
         --region=us-central1 \
         --image=gcr.io/$PROJECT_ID/cloud-run-release-manager \
         --service-account=release-manager@${PROJECT_ID}.iam.gserviceaccount.com \
-        --args=-verbosity=debug
+        --args=-verbosity=debug \
+        --args=-healthcheck-offset=30m \
+        --args=-min-requests=0 \
+        --args=-max-error-rate=1 \
+        --args=-min-wait=30m
     ```
+
+    See [this section](#default-rollout-configuration) for more details on the
+    arguments.
 
 1. Find the URL of your Cloud Run service and set as `URL` variable:
 
@@ -238,8 +246,8 @@ shell:
 
 At this point, you can start deploying services with label
 `rollout-strategy=gradual` and deploy new revisions with `--no-traffic` option
-and the Release Manager will slowly roll it out. See [this section](#try-out)
-for more details.
+and the Release Manager will slowly roll it out. See [this
+section](#try-it-out-locally) for more details.
 
 ## Configuration
 
