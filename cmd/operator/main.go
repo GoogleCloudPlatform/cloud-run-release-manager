@@ -100,9 +100,9 @@ func init() {
 	flag.DurationVar(&flTimeBeweenRollouts, "min-wait", 30*time.Minute, "minimum time to wait between rollout stages (in minutes), use 0 to disable")
 	flag.IntVar(&flMinRequestCount, "min-requests", 0, "expected minimum requests (in time window given by -healthcheck-offset) needed to determine candidate's health")
 	flag.Float64Var(&flErrorRate, "max-error-rate", 1.0, "expected max server error rate (in percent)")
-	flag.Float64Var(&flLatencyP99, "latency-p99", 0, "expected max latency for 99th percentile of requests (set 0 to ignore)")
-	flag.Float64Var(&flLatencyP95, "latency-p95", 0, "expected max latency for 95th percentile of requests (set 0 to ignore)")
-	flag.Float64Var(&flLatencyP50, "latency-p50", 0, "expected max latency for 50th percentile of requests (set 0 to ignore)")
+	flag.Float64Var(&flLatencyP99, "latency-p99", 0, "expected max latency for 99th percentile of requests in milliseconds (set 0 to ignore)")
+	flag.Float64Var(&flLatencyP95, "latency-p95", 0, "expected max latency for 95th percentile of requests in milliseconds (set 0 to ignore)")
+	flag.Float64Var(&flLatencyP50, "latency-p50", 0, "expected max latency for 50th percentile of requests in milliseconds (set 0 to ignore)")
 	flag.StringVar(&flGoogleSheetsID, "google-sheets", "", "ID of public Google sheets document to use as metrics provider")
 	flag.Parse()
 

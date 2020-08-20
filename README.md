@@ -26,12 +26,11 @@ one.
   * [Examples](#examples)
     + [Scenario 1: Automated Rollouts](#scenario-1-automated-rollouts)
     + [Scenario 2: Automated Rollbacks](#scenario-2-automated-rollbacks)
-- [Try it out (locally)](#try-it-out-locally)
-  * [Default rollout configuration](#default-rollout-configuration)
 - [Setup on GCP](#setup-on-gcp)
 - [Configuration](#configuration)
   * [Choosing services](#choosing-services)
   * [Rollout strategy](#rollout-strategy)
+- [Try it out (locally)](#try-it-out-locally)
 - [Observability & Troubleshooting](#observability--troubleshooting)
   * [What's happening with my rollout?](#whats-happening-with-my-rollout)
   * [Release Manager logs](#release-manager-logs)
@@ -40,13 +39,15 @@ one.
 
 ## How does it work?
 
-Cloud Run Release Manager periodically checks for new revisions in the services
-that opted-in for gradual rollouts.
+Cloud Run Release Manager is not a built-in Cloud Run feature. It’s an external
+tool deployed to your project. It oversees your Cloud Run services (that have
+opted-in for gradual rollouts) periodically, detects newly deployed revisions,
+monitors their metrics and makes a rollout or rollback decision.
 
-To opt-in services for gradual rollouts, you should label your services with
-`rollout-strategy=gradual` (default value). If a service has a newly deployed
-revision with 0% traffic, the Release Manager automatically assigns some initial
-traffic to the new revision (5% by default).
+To opt-in services for gradual rollouts, you should [label your services][label]
+with `rollout-strategy=gradual` (default value). If a service has a newly
+deployed revision with 0% traffic, the Release Manager automatically assigns
+some initial traffic to the new revision (5% [by default](#configuration)).
 
 The Release Manager manages 2 revisions at a time: the last revision that
 reached 100% of the traffic (tagged as `stable`) and the newest deployment
@@ -89,65 +90,10 @@ to **v1**
 
 ![Rollout stages](assets/rollback-stages.svg "Rollout stages from v1 to v2")
 
-## Try it out (locally)
-
-1. [Label the Cloud Run
-   services](https://cloud.google.com/run/docs/configuring/labels) (with label
-   `rollout-strategy=gradual`) for them to be selected for gradual rollouts:
-
-    ```sh
-    gcloud run services update <YOUR_SERVICE> \
-    --labels rollout-strategy=gradual \
-    --region us-east1
-    ```
-
-1. Clone this repository.
-1. Make sure you have Go compiler installed, run:
-
-    ```sh
-    go build -o cloud_run_release_manager ./cmd/operator
-    ```
-
-1. To start the program, run:
-
-    ```sh
-    ./cloud_run_release_manager -cli -project=<YOUR_PROJECT>
-    ```
-
-Once you run this command, it will check the health of Cloud Run services with
-the label `rollout-strategy=gradual` every minute by looking at the candidate's
-metrics for the past 30 minutes by default.
-
-The health is determined using the metrics and configured health criteria. If
-metrics show a healthy candidate, traffic to the candidate revision is
-increased. But if metrics show an unhealthy candidate, a roll back is performed.
-
-### Default rollout configuration
-
-When running the Release Manager, default configuration values are used. The
-most relevant values are:
-
-- `-healthcheck-offset=30m`: When assessing the candidate's health, the Release
-  Manager will get metrics about the candidate revision from the last 30 minutes
-- `-min-requests=0`: The Release Manager expects this number of requests in the
-  past 30 minutes (given by `healthcheck-offset`). If no enough requests were
-  made in that interval, no rollout is performed even if the other metrics show
-  a healthy candidate. The default value of `0` means that the number of
-  requests should be ignored when the Release Manager makes a decision about
-  rolling out the candidate.
-- `-max-error-rate=1` (in percent): By default, the only health criteria is a
-  expected max server error rate of 1%
-- `-min-wait=30m`: If the candidate revision is healthy, it can be rolled out
-  further only if 30 minutes since last roll out has elapsed. If the candidate
-  was unhealthy, however, it is rolled back independent of the elapsed time.
-
-The configuration values can be changed as described in the
-[configuration section](#configuration).
-
 ## Setup on GCP
 
-Cloud Run Release Manager is distributed as a service deployed to Cloud Run on
-your own project, invoked periodically by [Cloud
+Cloud Run Release Manager is distributed as a service deployed to **your GCP
+project**, running on Cloud Run and invoked periodically by [Cloud
 Scheduler](https://cloud.google.com/scheduler/).
 
 To set up the Release Manager on Cloud Run, run the following steps on your
@@ -212,14 +158,32 @@ shell:
         --image=gcr.io/$PROJECT_ID/cloud-run-release-manager \
         --service-account=release-manager@${PROJECT_ID}.iam.gserviceaccount.com \
         --args=-verbosity=debug \
-        --args=-healthcheck-offset=30m \
+        --args=-healthcheck-offset=10m \
         --args=-min-requests=0 \
         --args=-max-error-rate=1 \
-        --args=-min-wait=30m
+        --args=-min-wait=10m
     ```
 
-    See [this section](#default-rollout-configuration) for more details on the
-    arguments.
+    In the command above, the [configuration options](#configuration) provided
+    using `--args` configure how the Cloud Run Release Manager increases or
+    drops the traffic to a newly deployed revision:
+
+    - `--args=-healthcheck-offset=10m`: Look back 10 minutes to evaluate a
+      new revision’s health while making a rollout or rollback decision.
+    - `--args=-min-requests=0`: Do not require a minimum number of requests
+      arriving to the new revision while making a rollout decision.
+    - `--args=-max-error-rate=1`: Require new revision’s error rate to be &le;1%
+      to roll out. If it is &gt;1%, it will be rolled back.
+    - `--args=-min-wait=10m`: New revision should stay at least 10 minutes in
+      its current percentage before it is rolled out further.
+    - `--args=-verbosity=debug`: Log more details from the tool (optional)
+
+    To edit these options later, you can redeploy using the command above, or go
+    to [Cloud
+    Console](https://console.cloud.google.com/run/deploy/us-central1/release-manager).
+
+    Check out other [configuration options](#configuration) available to more
+    finely tune the Release Manager and its rollout strategy.
 
 1. Find the URL of your Cloud Run service and set as `URL` variable:
 
@@ -244,39 +208,49 @@ shell:
         --oidc-token-audience="${URL}/rollout"
     ```
 
-At this point, you can start deploying services with label
+At this point, you can start deploying services with [label]
 `rollout-strategy=gradual` and deploy new revisions with `--no-traffic` option
-and the Release Manager will slowly roll it out. See [this
-section](#try-it-out-locally) for more details.
+and the Release Manager will slowly roll it out.
+
+See the [Troubleshooting](#observability--troubleshooting) guide to understand
+and observe the rollout status of your services.
 
 ## Configuration
 
-Currently, all the configuration arguments must be specified using command line
-flags:
+Currently, all the configuration options are specified through command-line
+arguments.
+
+To customize these options, use the `--args=...` option while deploying this
+tool to Cloud Run (e.g. `--args=-min-requests=0`) instead of specifying them
+directly on `gcloud run deploy` command.
 
 ### Choosing services
 
 Cloud Run Release Manager can manage the rollout of multiple services at the
 same time.
 
-To opt-in a service for automated rollouts and rollbacks, the service must have
-the configured label selector. By default, services with the label
-`rollout-strategy=gradual` are looked for in all regions.
-
-**Note:** A project ID must be specified.
+To opt-in a Cloud Run service for automated rollouts and rollbacks, the service
+must have the [configured a label][label]. By default, services with the label
+`rollout-strategy=gradual` are looked for.
 
 - `-project`: Google Cloud project ID that has the Cloud Run services deployed
 - `-regions`: Regions where to look for opted-in services (default: [all
 available Cloud Run regions](https://cloud.google.com/run/docs/locations))
-- `-label`: The label selector to match to the opted-in services (default:
+- `-label`: The [label] selector to match to the opted-in services (default:
 `rollout-strategy=gradual`)
 
 ### Rollout strategy
 
 The rollout strategy consists of the steps and health criteria.
 
-- `-cli-run-interval`: The time between each health check (default: `60s`). This
-is only need it if running with `-cli` option.
+> ⚠️ **WARNING:** Cloud Monitoring Metrics API has [a reporting delay (up to 3
+> minutes)](https://cloud.google.com/monitoring/api/metrics_gcp#gcp-run).
+> Therefore, the Release Manager will be subject to the same delay while
+> querying the health of a new revision. Configuring the `-healthcheck-offset`
+> or `-min-wait` for less than 5 minutes might result in misinterpreting a
+> service’s health.
+
+
 - `-healthcheck-offset`: Time window to look back during health check to assess
 the candidate revision's health (default: `30m`).
 - `-min-requests`: The minimum number of requests needed to determine the
@@ -287,12 +261,57 @@ window determined by `-healthcheck-offset`
 `5,20,50,80`)
 - `-max-error-rate`: Expected maximum rate (in percent) of server errors
 (default: `1`)
-- `-latency-p99`: Expected maximum latency for 99th percentile of requests, 0 to
-ignore (default: `0`)
-- `-latency-p95`: Expected maximum latency for 95th percentile of requests, 0 to
-ignore (default: `0`)
-- `-latency-p50`: Expected maximum latency for 50th percentile of requests, 0 to
-ignore (default: `0`)
+- `-latency-p99`: Expected maximum latency for 99th percentile of requests (in
+  milliseconds), 0 to ignore (default: `0`)
+- `-latency-p95`: Expected maximum latency for 95th percentile of requests (in
+  milliseconds), 0 to ignore (default: `0`)
+- `-latency-p50`: Expected maximum latency for 50th percentile of requests (in
+  milliseconds), 0 to ignore (default: `0`)
+- `-cli-run-interval`: The time between each health check (default: `60s`). This
+  is only needed if running with `-cli`.
+
+The time arguments above follow [Go `time.Duration`
+syntax](https://golang.org/pkg/time/#ParseDuration) (e.g. 30s, 10m, 1h30m).
+
+## Try it out (locally)
+
+> **Note:** This section applies only if you want to run Cloud Run Release
+> Manager locally for troubleshooting, development and demo purposes.
+
+[label]: https://cloud.google.com/run/docs/configuring/labels#set-labels
+
+1. [Label the Cloud Run services][label] (with label `rollout-strategy=gradual`)
+   for them to be selected for gradual rollouts:
+
+    ```sh
+    gcloud run services update <YOUR_SERVICE> \
+      --labels rollout-strategy=gradual \
+      --region us-east1
+    ```
+
+1. Clone this repository.
+1. Make sure you have Go compiler installed, run:
+
+    ```sh
+    go build -o cloud_run_release_manager ./cmd/operator
+    ```
+
+1. To start the program, run:
+
+    ```sh
+    ./cloud_run_release_manager -cli -verbosity=debug -project=<YOUR_PROJECT>
+    ```
+
+Once you run this command, it will check the health of Cloud Run services with
+the [label] `rollout-strategy=gradual` every minute by looking at the
+candidate's metrics for the past 30 minutes by default.
+
+The health is determined using the metrics and configured health criteria. If
+metrics show a healthy candidate, traffic to the candidate revision is
+increased. But if metrics show an unhealthy candidate, a roll back is performed.
+
+See the [Troubleshooting](#observability--troubleshooting) guide to understand
+and observe the rollout status of your services.
 
 ## Observability & Troubleshooting
 
@@ -337,12 +356,13 @@ rollout.cloud.run/lastHealthReport: |-
 
 ### Release Manager logs
 
-You can quickly find out if there are errors when rolling out any of your
-services by querying for errors in the [Logs
-Viewer](https://console.cloud.google.com/logs)
+Release Manager sends its logs to Cloud Logging. If there’s something preventing
+the tool from working properly, it will be logged. However, you can also use the
+logs to view a detailed history of the rollout or rollback decisions.
 
-[Click to run the
-query](https://console.cloud.google.com/logs/viewer?advancedFilter=resource.type%20%3D%20%22cloud_run_revision%22%0Aresource.labels.service_name%20%3D%20%22release-manager%22%0Aresource.labels.location%20%3D%20%22us-central1%22%0Aseverity%20%3E%3D%20ERROR&interval=NO_LIMIT)
+You can quickly find out if there are errors from Release Manager by using the
+[Logs Viewer](https://console.cloud.google.com/logs) ([click to run the query
+below](https://console.cloud.google.com/logs/viewer?advancedFilter=resource.type%20%3D%20%22cloud_run_revision%22%0Aresource.labels.service_name%20%3D%20%22release-manager%22%0Aresource.labels.location%20%3D%20%22us-central1%22%0Aseverity%20%3E%3D%20ERROR&interval=NO_LIMIT)).
 
 ```plain
 resource.type = "cloud_run_revision"
