@@ -7,9 +7,15 @@ import (
 )
 
 // StringReport returns a human-readable report of the diagnosis.
-func StringReport(healthCriteria []config.HealthCriterion, diagnosis Diagnosis) string {
-	report := fmt.Sprintf("status: %s\n", diagnosis.OverallResult.String())
-	report += "metrics:"
+func StringReport(healthCriteria []config.HealthCriterion, diagnosis Diagnosis, enoughTimeSinceLastRollout bool) string {
+	report := fmt.Sprintf("status: %s", diagnosis.OverallResult.String())
+
+	// If no enough time has passed, add the information in the status.
+	if diagnosis.OverallResult == Healthy && !enoughTimeSinceLastRollout {
+		report += ", but no enough time since last rollout"
+	}
+
+	report += "\nmetrics:"
 	for i, result := range diagnosis.CheckResults {
 		criteria := healthCriteria[i]
 

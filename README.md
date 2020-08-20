@@ -131,10 +131,10 @@ most relevant values are:
   Manager will get metrics about the candidate revision from the last 30 minutes
 - `-min-requests=0`: The Release Manager expects this number of requests in the
   past 30 minutes (given by `healthcheck-offset`). If no enough requests were
-  made in that interval, no rollout or rollback is performed even if the other
-  metrics show a healthy/unhealthy candidate. The default value of `0` means
-  that the number of requests should be ignored when the Release Manager makes
-  a decission about rolling out/back.
+  made in that interval, no rollout is performed even if the other metrics show
+  a healthy candidate. The default value of `0` means that the number of
+  requests should be ignored when the Release Manager makes a decision about
+  rolling out the candidate.
 - `-max-error-rate=1` (in percent): By default, the only health criteria is a
   expected max server error rate of 1%
 - `-min-wait=30m`: If the candidate revision is healthy, it can be rolled out

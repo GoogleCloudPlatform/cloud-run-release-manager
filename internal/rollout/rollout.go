@@ -49,6 +49,9 @@ type Rollout struct {
 	// Used to determine if candidate should become stable during update.
 	promoteToStable bool
 
+	// Used to update annotations when rollout should occur.
+	shouldRollout bool
+
 	// Used to update annotations when rollback should occur.
 	shouldRollback bool
 }
@@ -137,12 +140,13 @@ func (r *Rollout) UpdateService(svc *run.Service) (*run.Service, bool, error) {
 	// A new candidate does not have metrics yet, so it can't be diagnosed.
 	if isNewCandidate(svc, candidate) {
 		r.log.Debug("new candidate, assign some traffic")
+		r.shouldRollout = true
 		svc.Spec.Traffic = r.rollForwardTraffic(svc.Spec.Traffic, stable, candidate)
 		svc = r.updateAnnotations(svc, stable, candidate)
 		r.setHealthReportAnnotation(svc, "new candidate, no health report available yet")
 
 		err := r.replaceService(svc)
-		return svc, false, errors.Wrap(err, "failed to replace service")
+		return svc, true, errors.Wrap(err, "failed to replace service")
 	}
 
 	diagnosis, err := r.diagnoseCandidate(candidate, r.strategy.HealthCriteria)
@@ -155,14 +159,14 @@ func (r *Rollout) UpdateService(svc *run.Service) (*run.Service, bool, error) {
 	if err != nil {
 		return svc, false, errors.Wrap(err, "failed to configure traffic after diagnosis")
 	}
-	if !trafficChanged {
-		// TODO(gvso): Update the annotations even if the traffic was unchanged.
-		return svc, trafficChanged, nil
-	}
 
 	svc.Spec.Traffic = traffic
 	svc = r.updateAnnotations(svc, stable, candidate)
-	report := health.StringReport(r.strategy.HealthCriteria, diagnosis)
+
+	// If candidate is healthy, traffic only changes when enough time has
+	// elapsed. Thus, we can pass it as an argument representing if enough time
+	// has elapsed since last rollout.
+	report := health.StringReport(r.strategy.HealthCriteria, diagnosis, trafficChanged)
 	r.setHealthReportAnnotation(svc, report)
 
 	err = r.replaceService(svc)
@@ -177,8 +181,10 @@ func (r *Rollout) replaceService(svc *run.Service) error {
 
 // updateAnnotations updates the annotations to keep some state about the rollout.
 func (r *Rollout) updateAnnotations(svc *run.Service, stable, candidate string) *run.Service {
-	now := r.time.Now().Format(time.RFC3339)
-	setAnnotation(svc, LastRolloutAnnotation, now)
+	if r.shouldRollout {
+		now := r.time.Now().Format(time.RFC3339)
+		setAnnotation(svc, LastRolloutAnnotation, now)
+	}
 
 	// The candidate has become the stable revision.
 	if r.promoteToStable {

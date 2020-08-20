@@ -54,11 +54,15 @@ type CheckResult struct {
 // actual values are not the same, the diagnosis is Unknown and an error is
 // returned.
 //
-// If the minimum number of requests is not met, then health cannot be
-// determined and diagnosis is Inconclusive.
+// Otherwise, all metrics criteria are checked to determine the diagnosis:
+// healthy, unhealthy, or inconclusive.
 //
-// Otherwise, all metrics criteria are checked to determine whether the revision
-// is healthy or not.
+// If the minimum number of requests is not met, the diagnosis is Inconclusive
+// even though all other criteria are met.
+//
+// However, if any criteria other than the request count is not met, the
+// diagnosis is unhealthy independent on the request count criteria. That is,
+// Unhealthy has precedence over Inconclusive.
 func Diagnose(ctx context.Context, healthCriteria []config.HealthCriterion, actualValues []float64) (Diagnosis, error) {
 	logger := util.LoggerFrom(ctx)
 	if len(healthCriteria) != len(actualValues) {
@@ -82,20 +86,22 @@ func Diagnose(ctx context.Context, healthCriteria []config.HealthCriterion, actu
 		}
 
 		isMet := isCriteriaMet(criteria.Metric, criteria.Threshold, value)
+		result := CheckResult{Threshold: criteria.Threshold, ActualValue: value, IsCriteriaMet: isMet}
+		results = append(results, result)
 
-		// For unmet request count, return inconclusive and empty results.
+		// For unmet request count, return inconclusive unless diagnosis is
+		// unhealthy.
 		if !isMet && criteria.Metric == config.RequestCountMetricsCheck {
-			logger.Debug("unmet criterion")
-			diagnosis = Inconclusive
-			results = nil
-			break
+			logger.Debug("unmet request count criterion")
+			if diagnosis != Unhealthy {
+				diagnosis = Inconclusive
+			}
+			continue
 		}
 
-		result := CheckResult{Threshold: criteria.Threshold, ActualValue: value}
 		if !isMet {
 			logger.Debug("unmet criterion")
 			diagnosis = Unhealthy
-			results = append(results, result)
 			continue
 		}
 
@@ -104,7 +110,6 @@ func Diagnose(ctx context.Context, healthCriteria []config.HealthCriterion, actu
 			diagnosis = Healthy
 		}
 		result.IsCriteriaMet = true
-		results = append(results, result)
 		logger.Debug("met criterion")
 	}
 

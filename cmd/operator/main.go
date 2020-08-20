@@ -253,8 +253,8 @@ func flagsToString() string {
 // of config.Metric based on them.
 func healthCriteriaFromFlags(requestCount int, errorRate, latencyP99, latencyP95, latencyP50 float64) []config.HealthCriterion {
 	metrics := []config.HealthCriterion{
-		{Metric: config.ErrorRateMetricsCheck, Threshold: errorRate},
 		{Metric: config.RequestCountMetricsCheck, Threshold: float64(requestCount)},
+		{Metric: config.ErrorRateMetricsCheck, Threshold: errorRate},
 	}
 
 	if latencyP99 > 0 {

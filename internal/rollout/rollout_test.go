@@ -190,6 +190,16 @@ func TestUpdateService(t *testing.T) {
 				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
 				{Metric: config.ErrorRateMetricsCheck, Threshold: 5},
 			},
+			outAnnotations: map[string]string{
+				rollout.StableRevisionAnnotation:    "test-001",
+				rollout.CandidateRevisionAnnotation: "test-002",
+				rollout.LastRolloutAnnotation:       makeLastRolloutAnnotation(clockMock, 0),
+				rollout.LastHealthReportAnnotation: "status: healthy, but no enough time since last rollout\n" +
+					"metrics:" +
+					"\n- request-latency[p99]: 500.00 (needs 750.00)" +
+					"\n- error-rate-percent: 1.00 (needs 5.00)" +
+					fmt.Sprintf("\nlastUpdate: %s", clockMock.Now().Format(time.RFC3339)),
+			},
 			changedTraffic: false,
 		},
 		{
@@ -258,7 +268,6 @@ func TestUpdateService(t *testing.T) {
 				rollout.StableRevisionAnnotation:              "test-001",
 				rollout.CandidateRevisionAnnotation:           "test-002",
 				rollout.LastFailedCandidateRevisionAnnotation: "test-002",
-				rollout.LastRolloutAnnotation:                 makeLastRolloutAnnotation(clockMock, 0),
 				rollout.LastHealthReportAnnotation: "status: unhealthy\n" +
 					"metrics:" +
 					"\n- request-latency[p99]: 500.00 (needs 100.00)" +
@@ -281,7 +290,10 @@ func TestUpdateService(t *testing.T) {
 				{RevisionName: "test-001", Percent: 100},
 				{LatestRevision: true, Tag: rollout.LatestTag},
 			},
-			lastReady:      "test-002",
+			lastReady: "test-002",
+			outAnnotations: map[string]string{
+				rollout.LastFailedCandidateRevisionAnnotation: "test-002",
+			},
 			changedTraffic: false,
 		},
 		{
@@ -293,7 +305,16 @@ func TestUpdateService(t *testing.T) {
 			lastReady: "test-002",
 			healthCriteria: []config.HealthCriterion{
 				{Metric: config.RequestCountMetricsCheck, Threshold: 1500},
-				{Metric: config.ErrorRateMetricsCheck, Threshold: 0.95},
+				{Metric: config.ErrorRateMetricsCheck, Threshold: 5},
+			},
+			outAnnotations: map[string]string{
+				rollout.StableRevisionAnnotation:    "test-001",
+				rollout.CandidateRevisionAnnotation: "test-002",
+				rollout.LastHealthReportAnnotation: "status: inconclusive\n" +
+					"metrics:" +
+					"\n- request-count: 1000 (needs 1500)" +
+					"\n- error-rate-percent: 1.00 (needs 5.00)" +
+					fmt.Sprintf("\nlastUpdate: %s", clockMock.Now().Format(time.RFC3339)),
 			},
 			changedTraffic: false,
 		},
@@ -331,14 +352,18 @@ func TestUpdateService(t *testing.T) {
 		r := rollout.New(context.TODO(), metricsMock, svcRecord, strategy).WithClient(runclient).WithLogger(lg).WithClock(clockMock)
 
 		t.Run(test.name, func(tt *testing.T) {
-			svc, changedTraffic, err := r.UpdateService(svc)
+			retSvc, changedTraffic, err := r.UpdateService(svc)
 			if test.shouldErr {
 				assert.NotNil(tt, err)
-			} else if !test.changedTraffic {
-				assert.False(tt, changedTraffic)
+				return
+			}
+
+			assert.Equal(tt, test.changedTraffic, changedTraffic)
+			assert.Equal(tt, test.outAnnotations, retSvc.Metadata.Annotations)
+			if !test.changedTraffic {
+				assert.Equal(tt, svc.Spec.Traffic, retSvc.Spec.Traffic)
 			} else {
-				assert.Equal(tt, test.outAnnotations, svc.Metadata.Annotations)
-				assert.Equal(tt, test.outTraffic, svc.Spec.Traffic)
+				assert.Equal(tt, test.outTraffic, retSvc.Spec.Traffic)
 			}
 		})
 

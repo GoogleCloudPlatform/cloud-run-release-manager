@@ -28,6 +28,7 @@ func (r *Rollout) determineTraffic(svc *run.Service, diagnosis health.DiagnosisR
 			return svc.Spec.Traffic, false, nil
 		}
 		r.log.Info("rolling forward")
+		r.shouldRollout = true
 		return r.rollForwardTraffic(svc.Spec.Traffic, stable, candidate), true, nil
 	case health.Unhealthy:
 		r.log.Info("unhealthy candidate, rollback")

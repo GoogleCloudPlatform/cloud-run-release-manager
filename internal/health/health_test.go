@@ -54,12 +54,15 @@ func TestDiagnosis(t *testing.T) {
 			name: "no enough requests, inconclusive",
 			healthCriteria: []config.HealthCriterion{
 				{Metric: config.RequestCountMetricsCheck, Threshold: 1000},
-				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 500},
+				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 1000},
 			},
 			results: []float64{800, 750.0},
 			expected: health.Diagnosis{
 				OverallResult: health.Inconclusive,
-				CheckResults:  nil,
+				CheckResults: []health.CheckResult{
+					{Threshold: 1000, ActualValue: 800, IsCriteriaMet: false},
+					{Threshold: 1000, ActualValue: 750.0, IsCriteriaMet: true},
+				},
 			},
 		},
 		{
@@ -98,6 +101,21 @@ func TestDiagnosis(t *testing.T) {
 				OverallResult: health.Unhealthy,
 				CheckResults: []health.CheckResult{
 					{Threshold: 0.95, ActualValue: 1.0},
+				},
+			},
+		},
+		{
+			name: "unhealthy revision with request count not reaching min",
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.ErrorRateMetricsCheck, Threshold: 0.95},
+				{Metric: config.RequestCountMetricsCheck, Threshold: 1000},
+			},
+			results: []float64{1.0, 500},
+			expected: health.Diagnosis{
+				OverallResult: health.Unhealthy,
+				CheckResults: []health.CheckResult{
+					{Threshold: 0.95, ActualValue: 1.0, IsCriteriaMet: false},
+					{Threshold: 1000, ActualValue: 500, IsCriteriaMet: false},
 				},
 			},
 		},
