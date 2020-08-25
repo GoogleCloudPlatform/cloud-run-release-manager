@@ -4,6 +4,7 @@ go 1.14
 
 require (
 	cloud.google.com/go v0.60.0
+	cloud.google.com/go/pubsub v1.3.1
 	github.com/TV4/logrus-stackdriver-formatter v0.1.0
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/jonboulle/clockwork v0.2.0
