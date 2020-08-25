@@ -59,10 +59,20 @@ var (
 	flCLI             bool
 	flCLILoopInterval time.Duration
 	flHTTPAddr        string
-	flProject         string
-	flLabelSelector   string
 
-	// Empty array means all regions.
+	// Generic target configuration
+	flPlatform      string
+	flProject       string
+	flLabelSelector string
+
+	// Anthos target configuration
+	flGKEClusterLocation string
+	flGKECluster         string
+	// TODO(gvso): Support multiple namespaces or all namespaces if none is
+	// specified.
+	flGKENamespace string
+
+	// Fully-managed target config. Empty array means all regions.
 	flRegions       []string
 	flRegionsString string
 
@@ -91,8 +101,12 @@ func init() {
 	flag.BoolVar(&flCLI, "cli", false, "run as CLI application to manage rollout in intervals")
 	flag.DurationVar(&flCLILoopInterval, "cli-run-interval", 60*time.Second, "the time between each rollout process (in seconds)")
 	flag.StringVar(&flHTTPAddr, "http-addr", defaultAddr, "address where to listen to http requests (e.g. :8080)")
+	flag.StringVar(&flPlatform, "platform", config.PlatformManaged, "target platform to query for Knative services (managed or gke)")
 	flag.StringVar(&flProject, "project", "", "project in which the service is deployed")
 	flag.StringVar(&flLabelSelector, "label", "rollout-strategy=gradual", "filter services based on a label (e.g. team=backend)")
+	flag.StringVar(&flGKEClusterLocation, "cluster-location", "", "(-platform=gke only) zone in which the cluster is located")
+	flag.StringVar(&flGKECluster, "cluster", "", "(-platform=gke only) ID of the cluster")
+	flag.StringVar(&flGKENamespace, "namespace", "default", "(-platform=gke only) Kubernetes namespace where to look for Knative services")
 	flag.StringVar(&flRegionsString, "regions", "", "the Cloud Run regions where the services should be looked at")
 	flag.Var(&flSteps, "step", "a percentage in traffic the candidate should go through")
 	flag.StringVar(&flStepsString, "steps", "5,20,50,80", "define steps in one flag separated by commas (e.g. 5,30,60)")
@@ -150,7 +164,12 @@ func main() {
 	logger.Debug(flagsToString())
 
 	// Configuration.
-	target := config.NewTarget(flProject, flRegions, flLabelSelector)
+	var target config.Target
+	if flPlatform == config.PlatformManaged {
+		target = config.NewManagedTarget(flProject, flRegions, flLabelSelector)
+	} else {
+		target = config.NewGKETarget(flProject, flGKEClusterLocation, flGKECluster, flGKENamespace, flLabelSelector)
+	}
 	healthCriteria := healthCriteriaFromFlags(flMinRequestCount, flErrorRate, flLatencyP99, flLatencyP95, flLatencyP50)
 	printHealthCriteria(logger, healthCriteria)
 	strategy := config.NewStrategy(target, flSteps, flHealthOffset, flTimeBeweenRollouts, healthCriteria)
@@ -197,14 +216,39 @@ func validateFlags() error {
 		}
 	}
 
-	for _, region := range flRegions {
-		if region == "" {
-			return errors.New("regions cannot be empty")
-		}
-	}
-
 	if flCLILoopInterval < 0 {
 		return errors.Errorf("cli run interval cannot be negative, got %s", flCLILoopInterval)
+	}
+
+	if flPlatform != config.PlatformManaged && flPlatform != config.PlatformGKE {
+		return errors.Errorf("invalid platform %s", flPlatform)
+	}
+
+	// GKE platform.
+	if flPlatform == "gke" {
+		if flGKECluster == "" {
+			return errors.Errorf("gke: cluster must be specified")
+		}
+		if flGKEClusterLocation == "" {
+			return errors.Errorf("gke: cluster location must be specified")
+		}
+		if flGKENamespace == "" {
+			return errors.Errorf("gke: namespace cannot be empty")
+		}
+		return nil
+	}
+
+	// Fully-managed platform.
+	for i, region := range flRegions {
+		if region == "" {
+			return errors.Errorf("region value at index %d cannot be empty", i)
+		}
+	}
+	if flGKECluster != "" {
+		return errors.New("cannot specify cluster for managed platform")
+	}
+	if flGKEClusterLocation != "" {
+		return errors.New("cannot specify cluster location for managed platform")
 	}
 	return nil
 }
@@ -216,15 +260,25 @@ func flagsToString() string {
 	} else {
 		str += fmt.Sprintf("-http-addr=%s\n", flHTTPAddr)
 	}
+	str += fmt.Sprintf("-project=%s\n-platform=%s\n", flProject, flPlatform)
 
-	regionsStr := "all"
-	if len(flRegions) != 0 {
-		regionsStr = fmt.Sprintf("%v", flRegions)
+	if flPlatform == config.PlatformGKE {
+		str += fmt.Sprintf("-cluster-location=%s\n"+
+			"-cluster=%s\n"+
+			"-namespace=%s\n",
+			flGKEClusterLocation,
+			flGKECluster,
+			flGKENamespace,
+		)
+	} else {
+		regionsStr := "all"
+		if len(flRegions) != 0 {
+			regionsStr = fmt.Sprintf("%v", flRegions)
+		}
+		str += fmt.Sprintf("-regions=%s\n", regionsStr)
 	}
 
-	str += fmt.Sprintf("-project=%s\n"+
-		"-label=%s\n"+
-		"-regions=%s\n"+
+	str += fmt.Sprintf("-label=%s\n"+
 		"-steps=%s\n"+
 		"-healthcheck-offset=%s\n"+
 		"-min-wait=%s\n"+
@@ -233,9 +287,7 @@ func flagsToString() string {
 		"-latency-p99=%.2f\n"+
 		"-latency-p95=%.2f\n"+
 		"-latency-p50=%.2f\n",
-		flProject,
 		flLabelSelector,
-		regionsStr,
 		flSteps,
 		flHealthOffset,
 		flTimeBeweenRollouts,

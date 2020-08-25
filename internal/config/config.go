@@ -16,6 +16,12 @@ const (
 	ErrorRateMetricsCheck    MetricsCheck = "error-rate-percent"
 )
 
+// Supported Knative platforms.
+const (
+	PlatformManaged string = "managed"
+	PlatformGKE     string = "gke"
+)
+
 // Target is the configuration to filter services.
 //
 // A target might have the following form
@@ -27,8 +33,18 @@ const (
 // }
 type Target struct {
 	Project       string
-	Regions       []string
 	LabelSelector string
+
+	// Either "managed" or "gke".
+	Platform string
+
+	// Regions are used when targeting Cloud Run fully-managed services.
+	Regions []string
+
+	// Anthos target configuration.
+	GKEClusterLocation string
+	GKEClusterName     string
+	GKENamespace       string
 }
 
 // HealthCriterion is a metrics threshold that should be met to consider a
@@ -53,12 +69,25 @@ type Config struct {
 	Strategies []Strategy
 }
 
-// NewTarget initializes a target to filter services by label.
-func NewTarget(project string, regions []string, labelSelector string) Target {
+// NewManagedTarget initializes a target for Cloud Run fully-managed.
+func NewManagedTarget(project string, regions []string, labelSelector string) Target {
 	return Target{
+		Platform:      PlatformManaged,
 		Project:       project,
 		Regions:       regions,
 		LabelSelector: labelSelector,
+	}
+}
+
+// NewGKETarget initializes a target for Cloud Run on Anthos.
+func NewGKETarget(project, clusterLocation, clusterName, namespace, label string) Target {
+	return Target{
+		Platform:           PlatformGKE,
+		Project:            project,
+		GKEClusterLocation: clusterLocation,
+		GKEClusterName:     clusterName,
+		GKENamespace:       namespace,
+		LabelSelector:      label,
 	}
 }
 
@@ -143,5 +172,18 @@ func validateTarget(target Target) error {
 	if target.LabelSelector == "" {
 		return errors.Errorf("label must be specified")
 	}
+
+	if target.Platform == PlatformGKE {
+		if target.GKEClusterLocation == "" {
+			return errors.New("cluster location required for GKE platform")
+		}
+		if target.GKEClusterName == "" {
+			return errors.New("cluster name required for GKE platform")
+		}
+		if target.GKENamespace == "" {
+			return errors.New("namespace required for GKE platform")
+		}
+	}
+
 	return nil
 }

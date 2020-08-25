@@ -20,7 +20,7 @@ func TestStrategy_Validate(t *testing.T) {
 	}{
 		{
 			name:                "correct config with label selector",
-			target:              config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
+			target:              config.NewManagedTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
 			steps:               []int64{5, 30, 60},
 			healthOffset:        10 * time.Minute,
 			timeBetweenRollouts: 10 * time.Minute,
@@ -32,7 +32,7 @@ func TestStrategy_Validate(t *testing.T) {
 		},
 		{
 			name:                "missing project",
-			target:              config.NewTarget("", []string{"us-east1", "us-west1"}, "team=backend"),
+			target:              config.NewManagedTarget("", []string{"us-east1", "us-west1"}, "team=backend"),
 			steps:               []int64{5, 30, 60},
 			healthOffset:        10 * time.Minute,
 			timeBetweenRollouts: 10 * time.Minute,
@@ -41,7 +41,7 @@ func TestStrategy_Validate(t *testing.T) {
 		},
 		{
 			name:                "missing steps",
-			target:              config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
+			target:              config.NewManagedTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
 			steps:               []int64{},
 			healthOffset:        10 * time.Minute,
 			timeBetweenRollouts: 10 * time.Minute,
@@ -49,7 +49,7 @@ func TestStrategy_Validate(t *testing.T) {
 		},
 		{
 			name:                "steps not in order",
-			target:              config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
+			target:              config.NewManagedTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
 			steps:               []int64{30, 30, 60},
 			healthOffset:        10 * time.Minute,
 			timeBetweenRollouts: 10 * time.Minute,
@@ -57,7 +57,7 @@ func TestStrategy_Validate(t *testing.T) {
 		},
 		{
 			name:                "step greater than 100",
-			target:              config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
+			target:              config.NewManagedTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
 			steps:               []int64{5, 30, 101},
 			healthOffset:        20,
 			timeBetweenRollouts: 10 * time.Minute,
@@ -65,7 +65,7 @@ func TestStrategy_Validate(t *testing.T) {
 		},
 		{
 			name:                "non-positive health offset",
-			target:              config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
+			target:              config.NewManagedTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
 			steps:               []int64{5, 30, 60},
 			healthOffset:        0,
 			timeBetweenRollouts: 10 * time.Minute,
@@ -73,7 +73,7 @@ func TestStrategy_Validate(t *testing.T) {
 		},
 		{
 			name:                "empty label selector",
-			target:              config.NewTarget("myproject", []string{"us-east1", "us-west1"}, ""),
+			target:              config.NewManagedTarget("myproject", []string{"us-east1", "us-west1"}, ""),
 			steps:               []int64{5, 30, 60},
 			healthOffset:        20,
 			timeBetweenRollouts: 10 * time.Minute,
@@ -81,7 +81,7 @@ func TestStrategy_Validate(t *testing.T) {
 		},
 		{
 			name:                "invalid request count value",
-			target:              config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
+			target:              config.NewManagedTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
 			steps:               []int64{5, 30, 60},
 			healthOffset:        20,
 			timeBetweenRollouts: 10 * time.Minute,
@@ -92,7 +92,7 @@ func TestStrategy_Validate(t *testing.T) {
 		},
 		{
 			name:                "invalid error rate in criteria",
-			target:              config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
+			target:              config.NewManagedTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
 			steps:               []int64{5, 30, 60},
 			healthOffset:        20,
 			timeBetweenRollouts: 10 * time.Minute,
@@ -103,7 +103,7 @@ func TestStrategy_Validate(t *testing.T) {
 		},
 		{
 			name:                "invalid latency percentile",
-			target:              config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
+			target:              config.NewManagedTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
 			steps:               []int64{5, 30, 60},
 			healthOffset:        20,
 			timeBetweenRollouts: 10 * time.Minute,
@@ -114,12 +114,48 @@ func TestStrategy_Validate(t *testing.T) {
 		},
 		{
 			name:                "invalid latency value",
-			target:              config.NewTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
+			target:              config.NewManagedTarget("myproject", []string{"us-east1", "us-west1"}, "team=backend"),
 			steps:               []int64{5, 30, 60},
 			healthOffset:        20,
 			timeBetweenRollouts: 10 * time.Minute,
 			healthCriteria: []config.HealthCriterion{
 				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: -1},
+			},
+			shouldErr: true,
+		},
+		{
+			name:                "GKE platform requires cluster location",
+			target:              config.NewGKETarget("myproject", "", "testcluster", "default", "team=backend"),
+			steps:               []int64{5, 30, 60},
+			healthOffset:        10 * time.Minute,
+			timeBetweenRollouts: 10 * time.Minute,
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
+				{Metric: config.RequestCountMetricsCheck, Threshold: 1000},
+			},
+			shouldErr: true,
+		},
+		{
+			name:                "GKE platform requires cluster name",
+			target:              config.NewGKETarget("myproject", "us-central1-a", "", "default", "team=backend"),
+			steps:               []int64{5, 30, 60},
+			healthOffset:        10 * time.Minute,
+			timeBetweenRollouts: 10 * time.Minute,
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
+				{Metric: config.RequestCountMetricsCheck, Threshold: 1000},
+			},
+			shouldErr: true,
+		},
+		{
+			name:                "GKE platform requires namespace",
+			target:              config.NewGKETarget("myproject", "us-central1-a", "testcluster", "", "team=backend"),
+			steps:               []int64{5, 30, 60},
+			healthOffset:        10 * time.Minute,
+			timeBetweenRollouts: 10 * time.Minute,
+			healthCriteria: []config.HealthCriterion{
+				{Metric: config.LatencyMetricsCheck, Percentile: 99, Threshold: 750},
+				{Metric: config.RequestCountMetricsCheck, Threshold: 1000},
 			},
 			shouldErr: true,
 		},
