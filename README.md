@@ -85,7 +85,7 @@ becomes `stable`
 Metrics show a "healthy" version and traffic to **v2** is increased to 30% only
 after 30 minutes have passed since last update
 5. Metrics for **v2** are retrieved one more time and show an "unhealthy"
-version. Traffic to **v2** is inmediately dropped, and all traffic is redirected
+version. Traffic to **v2** is immediately dropped, and all traffic is redirected
 to **v1**
 
 ![Rollout stages](assets/rollback-stages.svg "Rollout stages from v1 to v2")
